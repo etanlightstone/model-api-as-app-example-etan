@@ -126,6 +126,14 @@ def main() -> None:
         ])
         source_df = pd.DataFrame(X, columns=feature_columns)
 
+        # Print a ready-to-paste command so you can try your own sample.
+        example_values = " ".join(str(v) for v in X[0])
+        print(
+            "\nTry it yourself -- copy/paste and edit the feature values "
+            f"(order: {', '.join(feature_columns)}):\n"
+            f"\n    python predict.py --features {example_values}\n"
+        )
+
     probs, labels = predict(
         model, scaler_mean, scaler_scale, X, device, args.threshold
     )
@@ -134,14 +142,17 @@ def main() -> None:
     result["diabetes_probability"] = probs
     result["predicted_is_diabetic"] = labels
 
-    pd.set_option("display.width", 200)
-    pd.set_option("display.max_columns", None)
+    # Clear, human-readable verdict per sample.
     print("\nPredictions:")
-    print(result.to_string(index=False))
+    for i, (prob, label) in enumerate(zip(probs, labels)):
+        verdict = "DIABETIC" if label == 1 else "NOT diabetic"
+        prefix = f"Sample {i + 1}: " if len(probs) > 1 else ""
+        print(f"  {prefix}{verdict}  ({prob * 100:.1f}% probability of diabetes)")
 
     if args.output:
+        # The full table (features + probability + label) still goes to the CSV.
         result.to_csv(args.output, index=False)
-        print(f"\nWrote predictions to: {args.output}")
+        print(f"\nWrote detailed predictions to: {args.output}")
 
 
 if __name__ == "__main__":
