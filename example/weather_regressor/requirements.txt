@@ -1,0 +1,9 @@
+# For GPU support, install the CUDA build of torch instead of the CPU wheel:
+#   pip install torch
+# CPU-only:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+pandas
+numpy
+scikit-learn
+mlflow

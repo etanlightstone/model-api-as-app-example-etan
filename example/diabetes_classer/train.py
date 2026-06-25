@@ -37,9 +37,11 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 
 import mlflow
-import mlflow.pytorch
+import mlflow.pyfunc
+from mlflow.models import infer_signature
 
 from model import FEATURE_COLUMNS, TARGET_COLUMN, DiabetesNet
+from pyfunc_model import DiabetesClassifier
 
 
 # Default location of the diabetes CSV inside this Domino project's dataset.
@@ -254,10 +256,51 @@ def main() -> None:
                 indent=2,
             )
 
-        # ----- Log artifacts + model to MLflow -----
-        mlflow.log_artifact(model_path, artifact_path="model_binary")
-        mlflow.log_artifact(meta_path, artifact_path="model_binary")
-        mlflow.pytorch.log_model(model, name="model")
+        # ----- Log the model to MLflow as a signed pyfunc -----
+        # We wrap the network + fitted scaler in a small pyfunc (see
+        # pyfunc_model.py) and log it WITH A SIGNATURE inferred from a named-
+        # feature example. The signature is what lets Domino auto-wrap this
+        # registered model as a Model API straight from the registry entry: it
+        # knows the input columns (the training features) and the output columns
+        # without any custom scoring code. The checkpoint is bundled as an
+        # artifact so the served model is fully self-contained.
+        here = os.path.dirname(os.path.abspath(__file__))
+
+        input_example = pd.DataFrame(
+            [dict(zip(FEATURE_COLUMNS, [8000.0, 2.5, 0.6, 60000.0, 1.0, 180.0]))]
+        )
+
+        # Run the in-memory net/scaler once to pin down the output schema.
+        _xs = (input_example[FEATURE_COLUMNS].to_numpy(np.float32)
+               - scaler.mean_) / scaler.scale_
+        with torch.no_grad():
+            _p = torch.softmax(
+                model(torch.from_numpy(_xs.astype(np.float32)).to(device)), dim=1
+            )[:, 1].cpu().numpy()
+        output_example = pd.DataFrame(
+            {"diabetes_probability": np.round(_p, 4), "is_diabetic": (_p >= 0.5)}
+        )
+        signature = infer_signature(input_example, output_example)
+
+        mlflow.pyfunc.log_model(
+            name="model",
+            python_model=DiabetesClassifier(),
+            artifacts={"checkpoint": model_path},
+            code_paths=[
+                os.path.join(here, "model.py"),
+                os.path.join(here, "pyfunc_model.py"),
+            ],
+            signature=signature,
+            input_example=input_example,
+            # Unpinned to dodge torch's local '+cpu' version label (which is not
+            # installable from PyPI); Domino's environment supplies the builds.
+            pip_requirements=[
+                "torch", "pandas", "numpy", "scikit-learn", "mlflow", "cloudpickle",
+            ],
+        )
+
+        # Keep the human-readable metadata on the run for tracking/lineage.
+        mlflow.log_artifact(meta_path)
 
         print(f"MLflow run id: {run.info.run_id}")
         print("Final validation metrics:", json.dumps(val_metrics, indent=2))

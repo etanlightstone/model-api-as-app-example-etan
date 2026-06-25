@@ -41,6 +41,11 @@ Quick local test::
 from __future__ import annotations
 
 import os
+import sys
+
+# Ensure the sibling modules (model.py, predict.py) import cleanly regardless of
+# the working directory Domino loads this Model API file from.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import torch
 
