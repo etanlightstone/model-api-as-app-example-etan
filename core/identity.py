@@ -37,6 +37,10 @@ from core import settings
 # Identity headers Domino / its auth proxy (oauth2-proxy, Keycloak) have used.
 # An explicit override via MODEL_APP_USER_HEADER takes precedence.
 _DEFAULT_HEADERS = [
+    # Domino's app proxy sends the run-as user here, WITHOUT an x- prefix
+    # (confirmed on cloud-dogfood). Keep these first.
+    "domino-username", "domino-user", "domino-user-name", "domino-email",
+    "domino-user-id", "domino-runas-username",
     "x-domino-username", "x-domino-user", "x-domino-runas-username",
     "x-domino-user-name", "x-domino-user-id",
     "x-forwarded-user", "x-forwarded-email", "x-forwarded-preferred-username",
