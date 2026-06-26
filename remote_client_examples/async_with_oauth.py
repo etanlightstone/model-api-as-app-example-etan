@@ -32,7 +32,7 @@ import time
 
 import requests
 
-from cli_with_oauth import TOKEN_FILE, _verify, get_saved_url, get_valid_token
+from cli_with_oauth import TOKEN_FILE, _verify, format_error, get_saved_url, get_valid_token
 
 # Status values that mean the prediction is done (mirrors services/tasks/service.py).
 TERMINAL = {"succeeded", "failed", "cancelled", "expired"}
@@ -84,7 +84,8 @@ def submit(base: str, parameters: dict) -> str:
         timeout=30,
     )
     if not resp.ok:
-        sys.exit(f"Submit failed: {resp.status_code} {resp.reason}\n{resp.text}")
+        print(format_error(resp, sent_fields=list(parameters.keys())), file=sys.stderr)
+        sys.exit(1)
     pred_id = resp.json().get("asyncPredictionId")
     if not pred_id:
         sys.exit(f"Submit returned no asyncPredictionId: {resp.text}")
@@ -148,10 +149,15 @@ def _arg_value(argv: list[str], flag: str) -> str | None:
 
 
 def main(argv: list[str]) -> int:
+    if "--help" in argv or "-h" in argv:
+        print(__doc__)
+        print(f"State file (tokens + saved URLs): {TOKEN_FILE}")
+        return 0
+
     if "--logout" in argv:
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
-            print("Cached tokens and saved URLs removed.")
+            print(f"Cleared all settings (tokens + saved URLs): {TOKEN_FILE}")
         else:
             print("Nothing cached to remove.")
         return 0

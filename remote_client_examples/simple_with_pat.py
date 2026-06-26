@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import requests
@@ -37,6 +38,32 @@ PAYLOAD = {
 }
 
 
+def format_error(resp: requests.Response) -> str:
+    """Render a server error for humans, with guidance for schema mismatches."""
+    try:
+        detail = resp.json().get("detail", resp.text)
+    except ValueError:
+        detail = resp.text
+
+    out = [f"Request failed: HTTP {resp.status_code} {resp.reason}"]
+    if resp.status_code == 422 and isinstance(detail, str) and "validation error" in detail.lower():
+        missing = re.findall(r"^(\S.+)\n\s+Field required", detail, flags=re.MULTILINE)
+        out += ["", "The payload doesn't match this model's expected input schema."]
+        out.append(f"  You sent:         {', '.join(PAYLOAD['data'].keys())}")
+        if missing:
+            out.append(f"  Missing required: {', '.join(missing)}")
+        out += [
+            "",
+            "What to do:",
+            "  1. Open the app in a browser and check its Endpoints page — it lists this",
+            "     model's exact fields and a ready-to-copy example payload.",
+            "  2. Update PAYLOAD at the top of this script to match, then re-run.",
+        ]
+    else:
+        out.append(str(detail))
+    return "\n".join(out)
+
+
 def main() -> int:
     pat = os.environ.get("DOMINO_PAT")
     if not pat:
@@ -58,8 +85,7 @@ def main() -> int:
     )
 
     if not resp.ok:
-        print(f"Request failed: {resp.status_code} {resp.reason}", file=sys.stderr)
-        print(resp.text, file=sys.stderr)
+        print(format_error(resp), file=sys.stderr)
         return 1
 
     print(resp.json())

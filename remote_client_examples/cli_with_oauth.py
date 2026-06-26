@@ -26,6 +26,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 import secrets
 import socket
 import subprocess
@@ -306,6 +307,64 @@ def get_valid_token(force_login: bool = False) -> str:
     return store_tokens(host, browser_login(host))
 
 
+def _parse_validation_errors(detail: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Pull (missing_fields, [(field, message)]) out of a pydantic error dump."""
+    missing: list[str] = []
+    other: list[tuple[str, str]] = []
+    lines = detail.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        line = lines[i]
+        is_field = (
+            bool(line)
+            and not line[0].isspace()
+            and not line.lower().startswith("record")
+            and "validation error" not in line.lower()
+        )
+        if is_field and i + 1 < n and lines[i + 1][:1].isspace():
+            field = line.strip()
+            type_match = re.search(r"\[type=([^,\]]+)", lines[i + 1])
+            etype = type_match.group(1) if type_match else ""
+            message = re.sub(r"\s*\[type=.*$", "", lines[i + 1].strip())
+            if etype == "missing":
+                missing.append(field)
+            else:
+                other.append((field, message or etype))
+            i += 2
+            continue
+        i += 1
+    return missing, other
+
+
+def format_error(resp: requests.Response, sent_fields: list[str] | None = None) -> str:
+    """Render a server error for humans, with guidance for schema mismatches."""
+    try:
+        detail = resp.json().get("detail", resp.text)
+    except ValueError:
+        detail = resp.text
+
+    out = [f"Request failed: HTTP {resp.status_code} {resp.reason}"]
+    if resp.status_code == 422 and isinstance(detail, str) and "validation error" in detail.lower():
+        missing, other = _parse_validation_errors(detail)
+        out += ["", "The payload doesn't match this model's expected input schema."]
+        if sent_fields is not None:
+            out.append(f"  You sent:         {', '.join(sent_fields) or '(none)'}")
+        if missing:
+            out.append(f"  Missing required: {', '.join(missing)}")
+        for field, message in other:
+            out.append(f"  Invalid '{field}': {message}")
+        out += [
+            "",
+            "What to do:",
+            "  1. Open the app in a browser and check its Endpoints page — it lists this",
+            "     model's exact fields and a ready-to-copy example payload.",
+            "  2. Update the record at the top of this script to match, then re-run.",
+        ]
+    else:
+        out.append(str(detail))
+    return "\n".join(out)
+
+
 def call_model(url: str, token: str) -> requests.Response:
     return requests.post(
         url,
@@ -320,10 +379,15 @@ def call_model(url: str, token: str) -> requests.Response:
 
 
 def main(argv: list[str]) -> int:
+    if "--help" in argv or "-h" in argv:
+        print(__doc__)
+        print(f"State file (tokens + saved URLs): {TOKEN_FILE}")
+        return 0
+
     if "--logout" in argv:
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
-            print("Cached tokens and saved URLs removed.")
+            print(f"Cleared all settings (tokens + saved URLs): {TOKEN_FILE}")
         else:
             print("Nothing cached to remove.")
         return 0
@@ -340,8 +404,7 @@ def main(argv: list[str]) -> int:
         resp = call_model(url, token)
 
     if not resp.ok:
-        print(f"Request failed: {resp.status_code} {resp.reason}", file=sys.stderr)
-        print(resp.text, file=sys.stderr)
+        print(format_error(resp, sent_fields=list(PAYLOAD["data"].keys())), file=sys.stderr)
         return 1
 
     print(resp.json())
