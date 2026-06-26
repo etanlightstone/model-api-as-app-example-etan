@@ -1,4 +1,12 @@
 {% extends "base.html" %}
+
+{# Reusable copy-to-clipboard button. JS (static/app.js) finds the nearest
+   .copy-src inside the shared .copy-wrap ancestor and copies its text. #}
+{% macro copybtn(extra="") %}<button type="button" class="copy-btn {{ extra }}" aria-label="Copy to clipboard" title="Copy">
+  <svg class="copy-ic" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M5.5 2A1.5 1.5 0 0 0 4 3.5V10A1.5 1.5 0 0 0 5.5 11.5H10A1.5 1.5 0 0 0 11.5 10V3.5A1.5 1.5 0 0 0 10 2H5.5Zm0 1H10a.5.5 0 0 1 .5.5V10a.5.5 0 0 1-.5.5H5.5A.5.5 0 0 1 5 10V3.5A.5.5 0 0 1 5.5 3Z"/><path d="M2.5 5A1.5 1.5 0 0 0 1 6.5V13A1.5 1.5 0 0 0 2.5 14.5H7A1.5 1.5 0 0 0 8.5 13v-1.5H7.5V13a.5.5 0 0 1-.5.5H2.5A.5.5 0 0 1 2 13V6.5A.5.5 0 0 1 2.5 6H4V5H2.5Z"/></svg>
+  <svg class="copy-ok" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M13.5 4.5l-7 7-3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>{% endmacro %}
+
 {% block content %}
 <section class="model-head">
   <h1>{{ adapter.name }}</h1>
@@ -11,123 +19,188 @@
   {% if schema.notes %}<p class="note">{{ schema.notes }}</p>{% endif %}
 </section>
 
-<section class="card">
-  <h2>Input fields</h2>
-  {% if passthrough %}
-  <p class="note">Schema could not be inferred for this model, so the endpoint
-  accepts <strong>arbitrary JSON</strong> and forwards it to the model unchanged
-  (no field validation). Send whatever shape the model expects.</p>
-  {% else %}
-  <table class="schema-table">
-    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Example</th></tr></thead>
-    <tbody>
-      {% for f in schema.inputs %}
-      <tr>
-        <td><code>{{ f.name }}</code></td>
-        <td>{{ 'image (base64)' if f.image else f.type }}{% if f.type_unverified %}
-            <span class="badge" title="Inferred without a type hint; forwarded as a string like Domino does.">type unverified</span>{% endif %}</td>
-        <td>{{ 'yes' if f.required else 'no' }}</td>
-        <td><code>{{ f.example }}</code></td>
-      </tr>
+<div class="layout">
+  <div class="main-col">
+    <section class="card">
+      <div class="card-head-row">
+        <h2>Endpoints</h2>
+        <div class="ep-toggles">
+          <div class="toggle-where">
+            <label for="mode-toggle">Mode</label>
+            <select id="mode-toggle">
+              <option value="sync">Synchronous</option>
+              <option value="async">Asynchronous</option>
+            </select>
+          </div>
+          <div class="toggle-where">
+            <label for="where-toggle">Calling from</label>
+            <select id="where-toggle">
+              <option value="workload">Domino workspace / job</option>
+              <option value="offplatform">Laptop / CI</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <p class="muted">Same request body and method as a Domino Model API — only the
+      host/prefix and the source of the Bearer token differ. Endpoints sit behind
+      Domino app auth; programmatic callers send a Domino access token.</p>
+
+      {% for ep in endpoints %}
+      <div class="endpoint" data-ep-group="{{ ep.group }}">
+        <div class="endpoint-line">
+          <span class="method method-{{ ep.method|lower }}">{{ ep.method }}</span>
+          <span class="copy-wrap url-wrap">
+            <code class="url copy-src">{{ ep.url }}</code>
+            {{ copybtn("copy-btn-inline") }}
+          </span>
+          <span class="ep-title">{{ ep.title }}</span>
+        </div>
+        {% if ep.request_envelope %}
+        <div class="kv"><span>Request</span>
+          <div class="copy-wrap">
+            <pre class="copy-src">{{ ep.request_envelope | tojson(indent=2) }}</pre>
+            {{ copybtn() }}
+          </div>
+        </div>
+        {% endif %}
+        <div class="kv"><span>Response</span>
+          <div class="copy-wrap">
+            <pre class="copy-src">{{ ep.response_example | tojson(indent=2) }}</pre>
+            {{ copybtn() }}
+          </div>
+        </div>
+        {% if ep.curl_workload %}
+        <div class="kv"><span>curl</span>
+          <div class="copy-wrap">
+            <pre class="curl copy-src" data-workload="{{ ep.curl_workload }}" data-offplatform="{{ ep.curl_offplatform }}">{{ ep.curl_workload }}</pre>
+            {{ copybtn() }}
+          </div>
+        </div>
+        {% endif %}
+      </div>
       {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-  {% if output_fields %}
-  <h2>Output fields</h2>
-  <table class="schema-table">
-    <thead><tr><th>Field</th><th>Type</th><th>Example</th></tr></thead>
-    <tbody>
-      {% for f in output_fields %}
-      <tr><td><code>{{ f.name }}</code></td><td>{{ f.type }}</td><td><code>{{ f.example }}</code></td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-</section>
+    </section>
 
-<section class="card">
-  <div class="card-head-row">
-    <h2>Endpoints</h2>
-    <div class="toggle-where">
-      <label>Calling from:</label>
-      <select id="where-toggle">
-        <option value="workload">Domino workspace / job</option>
-        <option value="offplatform">Laptop / CI</option>
-      </select>
-    </div>
-  </div>
-  <p class="muted">Same request body and method as a Domino Model API — only the
-  host/prefix and the source of the Bearer token differ. Endpoints sit behind
-  Domino app auth; programmatic callers send a Domino access token.</p>
+    <section class="card" id="playground">
+      <h2>Playground</h2>
+      <p class="muted">Try the live endpoint. Your browser's Domino app-auth cookie
+      carries authentication — no token handling here.</p>
 
-  {% for ep in endpoints %}
-  <div class="endpoint">
-    <div class="endpoint-line">
-      <span class="method method-{{ ep.method|lower }}">{{ ep.method }}</span>
-      <code class="url">{{ ep.url }}</code>
-      <span class="ep-title">{{ ep.title }}</span>
-    </div>
-    {% if ep.request_envelope %}
-    <div class="kv"><span>Request</span>
-      <pre>{{ ep.request_envelope | tojson(indent=2) }}</pre></div>
-    {% endif %}
-    <div class="kv"><span>Response</span>
-      <pre>{{ ep.response_example | tojson(indent=2) }}</pre></div>
-    {% if ep.curl_workload %}
-    <div class="kv"><span>curl</span>
-      <pre class="curl" data-workload="{{ ep.curl_workload }}" data-offplatform="{{ ep.curl_offplatform }}">{{ ep.curl_workload }}</pre>
-    </div>
-    {% endif %}
-  </div>
-  {% endfor %}
-</section>
-
-<section class="card" id="playground">
-  <h2>Playground</h2>
-  <p class="muted">Try the live endpoint. Your browser's Domino app-auth cookie
-  carries authentication — no token handling here.</p>
-
-  <form id="pg-form" class="pg-form"
-        data-slug="{{ adapter.slug }}"
-        {% if passthrough %}data-raw="1"{% endif %}>
-    {% if passthrough %}
-    <div class="pg-field pg-raw-field">
-      <label for="pg-raw">Request record (JSON) — sent as <code>{"data": …}</code></label>
-      <textarea id="pg-raw" rows="6">{
+      <form id="pg-form" class="pg-form"
+            data-slug="{{ adapter.slug }}"
+            {% if passthrough %}data-raw="1"{% endif %}>
+        {% if passthrough %}
+        <div class="pg-field pg-raw-field">
+          <label for="pg-raw">Request record (JSON) — sent as <code>{"data": …}</code></label>
+          <textarea id="pg-raw" rows="6">{
   "your_field": "your_value"
 }</textarea>
-    </div>
-    {% else %}
-    {% for f in schema.inputs %}
-    <div class="pg-field">
-      <label for="pg-{{ f.name }}">{{ f.name }}
-        {% if not f.required %}<span class="muted">(optional)</span>{% endif %}</label>
-      {% if f.image %}
-        <input type="file" accept="image/*" id="pg-{{ f.name }}" data-field="{{ f.name }}" data-image="1" />
-      {% else %}
-        <input type="text" id="pg-{{ f.name }}" data-field="{{ f.name }}"
-               value="{{ example_record[f.name] }}" />
-      {% endif %}
-    </div>
-    {% endfor %}
-    {% endif %}
+        </div>
+        {% else %}
+        {% for f in schema.inputs %}
+        <div class="pg-field">
+          <label for="pg-{{ f.name }}">{{ f.name }}
+            {% if not f.required %}<span class="muted">(optional)</span>{% endif %}</label>
+          {% if f.image %}
+            <input type="file" accept="image/*" id="pg-{{ f.name }}" data-field="{{ f.name }}" data-image="1" />
+          {% else %}
+            <input type="text" id="pg-{{ f.name }}" data-field="{{ f.name }}"
+                   value="{{ example_record[f.name] }}" />
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
 
-    <div class="pg-controls">
-      <label class="pg-mode">
-        <input type="checkbox" id="pg-async" /> async (submit + poll)
-      </label>
-      <button type="submit" class="btn btn-primary">Run prediction</button>
-    </div>
-  </form>
+        <div class="pg-controls">
+          <label class="pg-mode">
+            <input type="checkbox" id="pg-async" /> async (submit + poll)
+          </label>
+          <button type="submit" class="btn btn-primary">Run prediction</button>
+        </div>
+      </form>
 
-  <div class="pg-result-wrap">
-    <div class="pg-status" id="pg-status"></div>
-    <pre class="pg-result" id="pg-result">Response will appear here.</pre>
+      <div class="pg-result-wrap">
+        <div class="pg-status" id="pg-status"></div>
+        <div class="copy-wrap">
+          <pre class="pg-result copy-src" id="pg-result">Response will appear here.</pre>
+          {{ copybtn() }}
+        </div>
+      </div>
+    </section>
   </div>
-</section>
+
+  <aside class="side-col">
+    <section class="card side-card">
+      <h2>Features shape</h2>
+      {% if passthrough %}
+      <p class="muted side-note">Schema could not be inferred — this endpoint accepts
+      arbitrary JSON and forwards it to the model unchanged.</p>
+      {% else %}
+      <div class="shape-group">
+        <h3 class="shape-sub">Input</h3>
+        <ul class="shape-list">
+          {% for f in schema.inputs %}
+          <li class="shape-item">
+            <code class="shape-name" title="{{ f.name }}">{{ f.name }}</code>
+            <span class="shape-type" title="{{ 'image (base64)' if f.image else f.type }}">{{ 'image' if f.image else f.type }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% if output_fields %}
+      <div class="shape-group">
+        <h3 class="shape-sub">Output</h3>
+        <ul class="shape-list">
+          {% for f in output_fields %}
+          <li class="shape-item">
+            <code class="shape-name" title="{{ f.name }}">{{ f.name }}</code>
+            <span class="shape-type" title="{{ f.type }}">{{ f.type }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card side-card">
+      <h2>Model</h2>
+      <dl class="meta-list">
+        <div class="meta-row">
+          <dt>Name</dt>
+          <dd class="meta-value" title="{{ model_meta.name }}">{{ model_meta.name }}</dd>
+        </div>
+        {% if model_meta.kind == 'registry' %}
+        <div class="meta-row">
+          <dt>Version</dt>
+          <dd class="meta-value" title="{{ model_meta.version }}">{{ model_meta.version }}</dd>
+        </div>
+        {% if model_meta.registry_url %}
+        <a class="model-link" href="{{ model_meta.registry_url }}" target="_blank" rel="noopener">
+          View in model registry
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3.5h6.5V10M12.5 3.5L6 10M9 3.5H4A1.5 1.5 0 0 0 2.5 5v7A1.5 1.5 0 0 0 4 13.5h7A1.5 1.5 0 0 0 12.5 12V7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        {% endif %}
+        {% else %}
+        <div class="meta-row">
+          <dt>File</dt>
+          <dd class="copy-wrap meta-value-copy">
+            <code class="meta-value mono copy-src" title="{{ model_meta.file_path }}">{{ model_meta.file_path }}</code>
+            {{ copybtn("copy-btn-inline") }}
+          </dd>
+        </div>
+        <div class="meta-row">
+          <dt>Function</dt>
+          <dd class="meta-value mono" title="{{ model_meta.func_name }}">{{ model_meta.func_name }}</dd>
+        </div>
+        {% endif %}
+      </dl>
+    </section>
+  </aside>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<div class="toast" id="toast"></div>
 <script src="static/app.js"></script>
 {% endblock %}

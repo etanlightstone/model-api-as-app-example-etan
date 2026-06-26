@@ -16,7 +16,8 @@ from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
 from core import config as config_mod
-from core import identity, links, snippets, state
+from core import identity, links, settings, snippets, state
+from core.adapter import CustomFunctionAdapter, RegistryAdapter
 from core.schema import example_record, input_json_schema
 
 router = APIRouter()
@@ -30,6 +31,7 @@ def _endpoint_descriptors(base: str, adapter) -> list[dict]:
     return [
         {
             "id": "sync",
+            "group": "sync",
             "title": "Real-time prediction",
             "method": "POST",
             "url": links.sync_url(base, slug),
@@ -40,6 +42,7 @@ def _endpoint_descriptors(base: str, adapter) -> list[dict]:
         },
         {
             "id": "async_submit",
+            "group": "async",
             "title": "Async submit",
             "method": "POST",
             "url": links.async_base(base, slug),
@@ -50,6 +53,7 @@ def _endpoint_descriptors(base: str, adapter) -> list[dict]:
         },
         {
             "id": "async_poll",
+            "group": "async",
             "title": "Async poll",
             "method": "GET",
             "url": links.async_base(base, slug) + "/{asyncPredictionId}",
@@ -59,6 +63,39 @@ def _endpoint_descriptors(base: str, adapter) -> list[dict]:
             "curl_offplatform": None,
         },
     ]
+
+
+def _model_meta(adapter) -> dict:
+    """Side-panel "Model" card data: name + where it came from.
+
+    Registry models get a browser link to their registry page; custom-function
+    models get their source file path + function name (no link).
+    """
+    meta = {"name": adapter.name}
+    if isinstance(adapter, RegistryAdapter):
+        version = adapter.version or adapter.stage or "latest"
+        meta.update(
+            kind="registry",
+            model_name=adapter.model_name,
+            version=version,
+            uri=adapter._uri(),
+            registry_url=links.registry_model_url(
+                settings.DOMINO_USER_HOST,
+                settings.PROJECT_OWNER,
+                settings.PROJECT_NAME,
+                adapter.model_name,
+                adapter.version or adapter.stage,
+            ),
+        )
+    elif isinstance(adapter, CustomFunctionAdapter):
+        meta.update(
+            kind="custom_function",
+            file_path=adapter.file_path,
+            func_name=adapter.func_name,
+        )
+    else:  # pragma: no cover — defensive; only two adapter kinds ship
+        meta["kind"] = "unknown"
+    return meta
 
 
 def _context(request: Request) -> dict:
@@ -86,6 +123,7 @@ def _context(request: Request) -> dict:
         ctx["json_schema"] = input_json_schema(adapter.input_schema)
         ctx["example_record"] = example_record(adapter.input_schema)
         ctx["endpoints"] = _endpoint_descriptors(base, adapter)
+        ctx["model_meta"] = _model_meta(adapter)
         ctx["has_image"] = adapter.input_schema.has_image_input()
         ctx["passthrough"] = adapter.input_schema.passthrough
     return ctx

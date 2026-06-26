@@ -141,3 +141,65 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--domino-blue
 
 /* Loading button state */
 .btn-loading { opacity: 0.65; cursor: not-allowed; }
+
+/* --- Endpoints page: two-column layout (main + narrow side panel) --------- */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.main-col, .side-col { min-width: 0; } /* let code blocks scroll, not stretch the grid */
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+.ep-toggles { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.toggle-where label { font-weight: 500; }
+
+/* Mode toggle: show only the selected group's endpoint cards. */
+.endpoint[hidden] { display: none; }
+
+/* Side panel cards: tighter than main cards. */
+.side-card { padding: 16px 18px; }
+.side-card h2 { font-size: 15px; margin-bottom: 12px; }
+.side-note { font-size: 13px; margin: 0; }
+
+/* Features shape: field name (truncated) + type, under Input/Output headings. */
+.shape-group + .shape-group { margin-top: 16px; }
+.shape-sub { margin: 0 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.shape-list { list-style: none; margin: 0; padding: 0; }
+.shape-item { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.shape-item:last-child { border-bottom: none; }
+.shape-name { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+              background: transparent; padding: 0; font-size: 12.5px; color: var(--ink); }
+.shape-type { flex: 0 0 auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* Model card: label/value rows + registry link or file path. */
+.meta-list { margin: 0; }
+.meta-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.meta-row:last-of-type { border-bottom: none; }
+.meta-row dt { flex: 0 0 60px; margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.meta-row dd { margin: 0; flex: 1 1 auto; min-width: 0; }
+.meta-value { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.meta-value.mono { font-family: var(--mono); font-size: 12px; background: transparent; padding: 0; }
+.meta-value-copy { display: flex; align-items: center; gap: 6px; }
+.meta-value-copy .meta-value { flex: 1 1 auto; }
+.model-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 12px; font-size: 13px; font-weight: 500; }
+.model-link svg { flex-shrink: 0; }
+
+/* --- Copy-to-clipboard buttons -------------------------------------------- */
+.copy-wrap { position: relative; }
+.url-wrap { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
+.url-wrap .url { overflow-x: auto; }
+
+.copy-btn { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; padding: 0; border-radius: 6px; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #C7D2E0;
+            transition: background .12s, color .12s, border-color .12s; }
+.copy-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+.copy-btn:focus-visible { outline: 2px solid var(--domino-blue); outline-offset: 1px; }
+.copy-ic, .copy-ok { display: block; fill: currentColor; }
+.copy-btn .copy-ok { display: none; }
+.copy-btn.copied { color: var(--ok); border-color: rgba(30,142,90,0.5); background: rgba(30,142,90,0.18); }
+.copy-btn.copied .copy-ic { display: none; }
+.copy-btn.copied .copy-ok { display: block; }
+
+/* Inline variant for light backgrounds (endpoint URL, file path). */
+.copy-btn-inline { position: static; width: 22px; height: 22px; flex-shrink: 0;
+                   border: 1px solid var(--line); background: #fff; color: var(--muted); }
+.copy-btn-inline:hover { background: var(--bg); color: var(--domino-blue); border-color: var(--domino-blue); }
+.copy-btn-inline.copied { color: var(--ok); border-color: rgba(30,142,90,0.5); background: rgba(30,142,90,0.1); }

@@ -51,6 +51,12 @@ TOKEN_PROXY_URL: str = f"{TOKEN_PROXY_BASE}{TOKEN_PROXY_PATH}"
 DOMINO_API_HOST: str = _first_env("DOMINO_API_HOST", "DOMINO_USER_HOST").rstrip("/")
 DOMINO_USER_API_KEY: str = os.environ.get("DOMINO_USER_API_KEY", "")
 
+# The externally-reachable Domino host, used to build *browser* links (e.g. the
+# "view in model registry" link on the Endpoints page). Prefer DOMINO_USER_HOST
+# — the in-cluster DOMINO_API_HOST may not be reachable from a user's browser —
+# and fall back to it only when the user host isn't set.
+DOMINO_USER_HOST: str = _first_env("DOMINO_USER_HOST", "DOMINO_API_HOST").rstrip("/")
+
 
 # --- Durable state location --------------------------------------------------
 def _resolve_data_dir() -> Path:
