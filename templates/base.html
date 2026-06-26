@@ -28,7 +28,7 @@
     </div>
   </nav>
 
-  <main class="container">
+  <main class="container {% block main_extra %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
   <footer class="footer">
