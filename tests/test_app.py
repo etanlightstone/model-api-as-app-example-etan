@@ -81,6 +81,30 @@ class SchemaInferenceTests(unittest.TestCase):
         _ = example_record(d.input_schema)
 
 
+class SiblingModulePurgeTests(unittest.TestCase):
+    def test_purge_drops_cached_generic_modules(self):
+        """A model cached under a generic name must not shadow the next load.
+
+        Mirrors the real failure: two registry models both bundle a
+        ``pyfunc_model`` module, and MLflow prepends the new model's code dir to
+        ``sys.path`` but never clears ``sys.modules``. Without purging, the
+        stale module wins and unpickling fails with "Can't get attribute ...".
+        """
+        import sys
+        import types
+
+        from core.adapter import _SIBLING_NAMES, _purge_sibling_modules
+
+        stale = types.ModuleType("pyfunc_model")  # no WeatherRegressor on it
+        sys.modules["pyfunc_model"] = stale
+        try:
+            _purge_sibling_modules()
+            for name in _SIBLING_NAMES:
+                self.assertNotIn(name, sys.modules)
+        finally:
+            sys.modules.pop("pyfunc_model", None)
+
+
 class AppTests(unittest.TestCase):
     def setUp(self):
         _reset_db()
