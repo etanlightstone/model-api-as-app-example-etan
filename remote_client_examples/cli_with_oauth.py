@@ -1,9 +1,9 @@
 """Call the model (hosted as a Domino App) from off-platform via browser OAuth.
 
 A friendlier alternative to pasting a PAT (`simple_with_pat.py`): the first run
-prompts for your Domino instance URL and opens a browser to sign in (Keycloak,
-Authorization Code + PKCE on a localhost callback). Tokens are cached on disk, so
-later runs are non-interactive.
+prompts for your Domino instance URL *and* the model endpoint URL, then opens a
+browser to sign in (Keycloak, Authorization Code + PKCE on a localhost callback).
+Both URLs and the tokens are cached on disk, so later runs are non-interactive.
 
 Domino access tokens are short-lived (~5 min). This script handles that for you:
 it refreshes silently with the stored offline refresh token, and if that's gone
@@ -13,9 +13,10 @@ recovery and one retry.
 
     python cli_with_oauth.py            # first run: prompts + browser; then cached
     python cli_with_oauth.py --login    # force a fresh browser sign-in
-    python cli_with_oauth.py --logout   # forget the cached tokens
+    python cli_with_oauth.py --logout   # forget cached tokens + saved URLs
 
-Set MODEL_API_URL to point at a different model endpoint.
+The companion `async_with_oauth.py` reuses this module's auth + settings helpers.
+Env vars override the saved prompts: MODEL_API_URL (endpoint), DOMINO_URL (host).
 """
 
 from __future__ import annotations
@@ -42,15 +43,9 @@ SCOPES = "openid profile email domino-jwt-claims offline_access"
 AUTH_TIMEOUT = 300  # seconds to wait for the browser sign-in
 REFRESH_MARGIN = 30  # refresh this many seconds before the access token expires
 
-# --- Where we cache tokens. Conventional per-user dotdir, file mode 0600. ---
+# --- Where we cache tokens + saved URLs. Per-user dotdir, file mode 0600. ---
 TOKEN_DIR = os.path.expanduser("~/.domino")
 TOKEN_FILE = os.path.join(TOKEN_DIR, "model_api_auth.json")
-
-# The model's sync endpoint. Override per deployment via MODEL_API_URL.
-MODEL_API_URL = os.environ.get(
-    "MODEL_API_URL",
-    "https://apps.cloud-dogfood.domino.tech/apps/91b27ca1-7996-4b7a-b966-e99b30b9cc0e/models/weathclasser/latest/model",
-)
 
 # The input record. Shape must match the model's schema (see the app's Endpoints
 # page for the exact fields and an example payload).
@@ -81,7 +76,7 @@ def _keycloak_base(host: str) -> str:
     return f"{host}/auth/realms/{REALM}/protocol/openid-connect"
 
 
-# --- Token cache --------------------------------------------------------------
+# --- On-disk state: tokens + saved URLs, all in one 0600 file -----------------
 def load_state() -> dict | None:
     if not os.path.exists(TOKEN_FILE):
         return None
@@ -92,21 +87,32 @@ def load_state() -> dict | None:
         return None
 
 
-def store_tokens(host: str, tokens: dict) -> str:
-    """Persist tokens (mode 0600) and return the fresh access token."""
+def update_state(**fields) -> dict:
+    """Merge fields into the on-disk state (creating it if needed) and return it.
+
+    Merging (not overwriting) is what lets the sync + async examples share one
+    cache file without clobbering each other's saved endpoint URLs.
+    """
+    state = load_state() or {}
+    state.update(fields)
     os.makedirs(TOKEN_DIR, mode=0o700, exist_ok=True)
-    state = {
-        "domino_url": host,
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens.get("refresh_token"),
-        "expires_at": time.time() + tokens.get("expires_in", 300),
-        "token_type": tokens.get("token_type", "Bearer"),
-        "saved_at": time.time(),
-    }
     with open(TOKEN_FILE, "w") as fh:
         json.dump(state, fh, indent=2)
     os.chmod(TOKEN_FILE, 0o600)
-    return state["access_token"]
+    return state
+
+
+def store_tokens(host: str, tokens: dict) -> str:
+    """Persist tokens and return the fresh access token."""
+    update_state(
+        domino_url=host,
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token"),
+        expires_at=time.time() + tokens.get("expires_in", 300),
+        token_type=tokens.get("token_type", "Bearer"),
+        saved_at=time.time(),
+    )
+    return tokens["access_token"]
 
 
 # --- PKCE + browser sign-in ---------------------------------------------------
@@ -232,14 +238,47 @@ def refresh_tokens(host: str, refresh_token: str) -> dict:
     return resp.json()
 
 
-def _prompt_host() -> str:
-    print("First-time setup: which Domino instance are you using?")
-    print("  e.g. https://your-company.domino.tech")
+def _prompt_url(question: str, example: str) -> str:
+    print(f"\n{question}")
+    print(f"  e.g. {example}")
     while True:
-        raw = input("Domino instance URL: ").strip().rstrip("/")
+        raw = input("> ").strip().rstrip("/")
         if raw.startswith("http://") or raw.startswith("https://"):
             return raw
         print("  Please enter a full URL starting with https://")
+
+
+def _prompt_host() -> str:
+    return _prompt_url(
+        "First-time setup: which Domino instance are you using?",
+        "https://your-company.domino.tech",
+    )
+
+
+def get_saved_url(key: str, env_var: str, question: str, example: str) -> str:
+    """Return a saved URL setting, prompting once and persisting it if unset.
+
+    Resolution order: env var override → value saved in the state file → prompt
+    the user and save. Shared by both examples (each passes its own key/prompt).
+    """
+    override = os.environ.get(env_var)
+    if override:
+        return override.rstrip("/")
+    state = load_state() or {}
+    if state.get(key):
+        return state[key]
+    url = _prompt_url(question, example)
+    update_state(**{key: url})
+    return url
+
+
+def get_model_url() -> str:
+    return get_saved_url(
+        "model_url",
+        "MODEL_API_URL",
+        "Which model endpoint should I call? (the sync URL from the app's Endpoints page)",
+        "https://apps.your-company.domino.tech/apps/<app-id>/models/<slug>/latest/model",
+    )
 
 
 def get_valid_token(force_login: bool = False) -> str:
@@ -249,8 +288,8 @@ def get_valid_token(force_login: bool = False) -> str:
     sign-in. The host is only ever asked for on the very first run.
     """
     state = load_state()
-    if state is None:
-        host = _prompt_host()
+    if not state or not state.get("access_token") or not state.get("domino_url"):
+        host = (state or {}).get("domino_url") or _prompt_host()
         return store_tokens(host, browser_login(host))
 
     host = state["domino_url"]
@@ -267,9 +306,9 @@ def get_valid_token(force_login: bool = False) -> str:
     return store_tokens(host, browser_login(host))
 
 
-def call_model(token: str) -> requests.Response:
+def call_model(url: str, token: str) -> requests.Response:
     return requests.post(
-        MODEL_API_URL,
+        url,
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
@@ -284,20 +323,21 @@ def main(argv: list[str]) -> int:
     if "--logout" in argv:
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
-            print("Cached tokens removed.")
+            print("Cached tokens and saved URLs removed.")
         else:
-            print("No cached tokens to remove.")
+            print("Nothing cached to remove.")
         return 0
 
     token = get_valid_token(force_login="--login" in argv)
-    resp = call_model(token)
+    url = get_model_url()
+    resp = call_model(url, token)
 
     # A token can be rejected even when we think it's fresh (clock skew, server
     # restart, revoked session). Recover once by forcing a new sign-in.
     if resp.status_code in (401, 403):
         print("Token rejected; re-authenticating and retrying once...")
         token = get_valid_token(force_login=True)
-        resp = call_model(token)
+        resp = call_model(url, token)
 
     if not resp.ok:
         print(f"Request failed: {resp.status_code} {resp.reason}", file=sys.stderr)
