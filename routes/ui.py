@@ -62,12 +62,15 @@ def _endpoint_descriptors(base: str, adapter) -> list[dict]:
 def _context(request: Request) -> dict:
     st = state.get_state()
     caller = identity.resolve_caller(request)
-    base = links.app_base_url(request)
+    # We can't know the external prefix server-side; emit a placeholder for any
+    # absolute URL and let the browser fill it from document.baseURI.
+    base = links.APP_BASE_PLACEHOLDER
     ctx = {
         "request": request,
         "state": st,
         "caller": caller,
         "base": base,
+        "base_href": links.base_href(request),
         "app_title": "Model API (as App)",
     }
     adapter = state.get_adapter()

@@ -5,7 +5,7 @@
   <div class="empty-card">
     <h1>Settings are owner-only.</h1>
     <p class="muted">Only the project owner can change which model this app hosts.</p>
-    <a class="btn" href="{{ url_for('home') }}">← Back</a>
+    <a class="btn" href=".">← Back</a>
   </div>
 </section>
 {% else %}
@@ -81,5 +81,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='settings.js') }}"></script>
+<script src="static/settings.js"></script>
 {% endblock %}

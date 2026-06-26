@@ -72,15 +72,20 @@ async def select_model(request: Request):
         params = {"model_name": model_name, "version": version}
 
     elif source_type == "custom_function":
+        import os
+
         file_path = (body.get("file_path") or "").strip()
         if not file_path:
             raise HTTPException(422, "file_path is required for a custom function.")
         func_name = (body.get("func_name") or "predict").strip()
         display = (body.get("display_name") or "").strip()
-        slug = slugify(body.get("slug") or display or file_path)
+        # Default the slug to the *folder* name (e.g. weather-regressor), not the
+        # full file path — a model_app.yaml `slug`/`name` still overrides on warmup.
+        folder = os.path.basename(os.path.dirname(os.path.abspath(file_path))) or "model"
+        slug = slugify(body.get("slug") or display or folder)
         params = {"file_path": file_path, "func_name": func_name,
                   "overrides": body.get("overrides") or {}}
-        display = display or slug
+        display = display or folder
     else:
         raise HTTPException(422, "source_type must be 'registry' or 'custom_function'.")
 

@@ -3,8 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Resolve every relative URL against the app root, regardless of the
+       (unknown) reverse-proxy prefix the browser actually used. -->
+  <base href="{{ base_href }}" />
   <title>{% block title %}{{ app_title }}{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
+  <link rel="stylesheet" href="static/style.css" />
 </head>
 <body>
   <header class="topbar">
@@ -14,9 +17,9 @@
         <span class="brand-name">{{ app_title }}</span>
       </div>
       <nav class="topnav">
-        <a href="{{ url_for('home') }}">Endpoints</a>
+        <a href=".">Endpoints</a>
         {% if state.ready %}<a href="#playground">Playground</a>{% endif %}
-        {% if caller.is_owner %}<a href="{{ url_for('settings_page') }}">Settings</a>{% endif %}
+        {% if caller.is_owner %}<a href="settings">Settings</a>{% endif %}
       </nav>
     </div>
   </header>

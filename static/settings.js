@@ -82,7 +82,7 @@ if (btnSaveReg) {
     btnSaveReg.disabled = false;
     if (r.ok) {
       toast("Now hosting " + r.data.display_name);
-      setTimeout(() => (window.location = "."), 900);
+      setTimeout(() => (window.location = document.baseURI), 900);
     } else {
       toast(r.data.detail || "Failed to load model", true);
     }
@@ -103,7 +103,7 @@ if (btnSaveFn) {
     btnSaveFn.disabled = false;
     if (r.ok) {
       toast("Now hosting " + r.data.display_name);
-      setTimeout(() => (window.location = "."), 900);
+      setTimeout(() => (window.location = document.baseURI), 900);
     } else {
       toast(r.data.detail || "Failed to load function", true);
     }

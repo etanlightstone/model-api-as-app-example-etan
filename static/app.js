@@ -1,5 +1,26 @@
 // Playground + docs interactions. ~vanilla JS, no framework.
 
+// The server can't know the external reverse-proxy prefix, so it emits a
+// placeholder and we fill the real absolute base from document.baseURI (set via
+// the page's <base href>, which reflects the URL the browser actually used).
+const APP_BASE = document.baseURI.replace(/\/+$/, "");
+const BASE_TOKEN = "__APP_BASE__";
+
+function fillBase(text) {
+  return (text || "").split(BASE_TOKEN).join(APP_BASE);
+}
+
+// Substitute the placeholder anywhere it was rendered: endpoint URLs + the
+// copy-paste curl snippets (both visible text and the toggle's stored variants).
+document.querySelectorAll(".url").forEach((el) => {
+  el.textContent = fillBase(el.textContent);
+});
+document.querySelectorAll("pre.curl").forEach((pre) => {
+  if (pre.dataset.workload) pre.dataset.workload = fillBase(pre.dataset.workload);
+  if (pre.dataset.offplatform) pre.dataset.offplatform = fillBase(pre.dataset.offplatform);
+  pre.textContent = fillBase(pre.textContent);
+});
+
 // --- "Calling from" toggle: swap the curl snippets in place ---------------
 const whereToggle = document.getElementById("where-toggle");
 if (whereToggle) {
@@ -107,7 +128,7 @@ async function runAsync(base, slug, record) {
 if (form) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const base = form.dataset.base;
+    const base = APP_BASE;  // absolute app root from document.baseURI
     const slug = form.dataset.slug;
     const isAsync = document.getElementById("pg-async").checked;
     try {

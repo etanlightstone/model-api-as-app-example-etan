@@ -290,6 +290,47 @@ class PassthroughTests(unittest.TestCase):
             self.assertEqual(body["result"]["received"]["x"], [1, 2, 3])
 
 
+class ProxyPathTests(unittest.TestCase):
+    """The app is served under an unknown reverse-proxy prefix that nginx strips.
+    URLs must be relative / placeholder-based so nothing assumes the root path."""
+
+    def test_base_href_depth(self):
+        from types import SimpleNamespace
+
+        from core import links
+
+        def req(path):
+            return SimpleNamespace(scope={"path": path}, url=SimpleNamespace(path=path))
+
+        self.assertEqual(links.base_href(req("/")), "./")
+        self.assertEqual(links.base_href(req("/settings")), "./")
+        self.assertEqual(links.base_href(req("/a/b")), "../")
+
+    def test_pages_use_relative_assets_and_base_tag(self):
+        _reset_db()
+        with TestClient(__import__("app").app) as client:
+            client.post("/settings/select", json={
+                "source_type": "custom_function", "file_path": WEATHER, "func_name": "predict"})
+            html = client.get("/").text
+            # No root-absolute asset links that would escape the proxy prefix.
+            self.assertIn('href="static/style.css"', html)
+            self.assertIn('src="static/app.js"', html)
+            self.assertNotIn('href="/static/', html)
+            self.assertNotIn('src="/static/', html)
+            self.assertIn("<base href=", html)
+            # Absolute base is a placeholder, filled client-side from document.baseURI.
+            self.assertIn("__APP_BASE__/models/weather-regressor/latest/model", html)
+            self.assertNotIn("http://testserver/models", html)
+
+    def test_settings_page_relative_assets(self):
+        _reset_db()
+        with TestClient(__import__("app").app) as client:
+            html = client.get("/settings").text
+            self.assertIn('src="static/settings.js"', html)
+            self.assertNotIn('src="/static/', html)
+            self.assertIn("<base href=", html)
+
+
 class OwnerGatingTests(unittest.TestCase):
     def setUp(self):
         _reset_db()

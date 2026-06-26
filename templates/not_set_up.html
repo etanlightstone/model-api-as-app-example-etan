@@ -12,7 +12,7 @@
 
     {% if caller.is_owner %}
       <p>As the project owner, you can pick a model to host:</p>
-      <a class="btn btn-primary" href="{{ url_for('settings_page') }}">Go to Settings →</a>
+      <a class="btn btn-primary" href="settings">Go to Settings →</a>
     {% else %}
       <p class="muted">The project owner needs to configure a model before this
       endpoint becomes available. Check back soon.</p>
