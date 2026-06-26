@@ -188,6 +188,12 @@ That single `await` is the whole trick: the CPU work runs in another process on
 another core, and the event loop is parked exactly as if it were waiting on I/O.
 Live sync requests keep being served the entire time.
 
+If `MODEL_APP_TASKS_CHUNK_TIMEOUT_SECONDS` is set, that await is wrapped in
+`asyncio.wait_for(...)` — a guard against a chunk that *never returns* (an
+infinite loop or wedged external call). It defaults to `0` (disabled) so
+legitimately slow models aren't cut off; see *Surviving a restart* for what a
+breach does.
+
 `classify_chunk` (in `services/tasks/runner.py`) runs **inside** a pool worker.
 The worker loaded the model once at startup via `init_worker` into a module
 global, so each chunk is pure compute — validate, predict, return rows. No
@@ -295,6 +301,48 @@ An `attempts` counter (incremented on every claim, checked right after) fails a
 task that keeps crashing — the poison-input guard — instead of letting it loop
 forever.
 
+**Surviving a hang.** A process that *crashes* surfaces as a `BrokenProcessPool`
+and a process that's *interrupted* by a redeploy goes stale and is reclaimed —
+both covered above. The one case neither catches is a process that's alive but
+**wedged** (an infinite loop, a deadlock, an external call with no timeout): the
+heartbeat keeps ticking on its own timer, so the task never looks stale and runs
+forever, pinning a pool worker and a concurrency slot. The optional
+`MODEL_APP_TASKS_CHUNK_TIMEOUT_SECONDS` is the safety valve. On a breach the
+process backend can't force-cancel a running future, so it does the only
+reliable thing — **shuts the pool down and rebuilds it**, killing the wedged
+worker — then fails the chunk so the normal attempts/retry path resumes it from
+the last checkpoint. (Rebuilding the pool also interrupts any *other* chunk
+in flight on it, exactly like the `BrokenProcessPool` case; those tasks just
+resume from their own cursors.) The thread backend can't kill a stuck thread, so
+there it only fails the task and abandons the thread to finish in the
+background. Left at the default `0`, none of this engages.
+
+---
+
+## Retention and cleanup
+
+A finished task doesn't live forever. The same worker loop that claims work also
+runs a **retention reaper** (`_reap`), throttled to sweep at most once every
+`MODEL_APP_TASKS_REAP_SECONDS` (default 300; set `0` to disable). Each sweep does
+two things:
+
+1. **Expires the overdue.** Any non-terminal task whose `expires_at` has passed
+   is flipped to `expired` — this closes the case of a task that was submitted
+   but never claimed (e.g. the engine was disabled the whole time).
+2. **Prunes the retired.** Any *terminal* task older than
+   `MODEL_APP_TASKS_RETENTION_DAYS` (default 7) has its SQLite row deleted **and**
+   its on-disk blobs removed, so neither the table nor the dataset grows without
+   bound. Before this existed, `RETENTION_DAYS` only set `expires_at` at submit
+   time and was never enforced for work that actually ran — succeeded rows and
+   their `output.jsonl` accumulated indefinitely.
+
+The one thing the reaper is careful **not** to delete is your input data. A
+by-reference `.jsonl` task keeps `input_file_path` pointing at the *caller's own
+dataset file* (it's never copied into the task dir), so the reaper only unlinks
+blobs that live under the app's own `tasks/<id>/` directory — it never touches a
+file you supplied. File deletes are best-effort: a missing or unremovable blob is
+skipped, the row is still pruned.
+
 ---
 
 ## Concurrency: three ceilings
@@ -361,7 +409,9 @@ All read from the environment (`worker.py`, `service.py`):
 | `MODEL_APP_TASKS_MAX_ATTEMPTS` | `3` | Re-run ceiling before failing (poison guard). |
 | `MODEL_APP_TASKS_TORCH_THREADS` | `1` | Intra-op threads per worker (anti-oversubscription). |
 | `MODEL_APP_TASKS_USER_MAX_CONCURRENT` | `5` | Per-user in-flight cap. |
-| `MODEL_APP_TASKS_RETENTION_DAYS` | `7` | Task expiry horizon. |
+| `MODEL_APP_TASKS_RETENTION_DAYS` | `7` | How long terminal tasks (row + owned blobs) are kept before the reaper prunes them. |
+| `MODEL_APP_TASKS_REAP_SECONDS` | `300` | How often the retention reaper sweeps; `0` disables it. |
+| `MODEL_APP_TASKS_CHUNK_TIMEOUT_SECONDS` | `0` (disabled) | Per-chunk inference timeout; a breach kills/rebuilds the pool and fails the chunk. |
 
 Live health is exposed via `worker_state()` — backend, pool size, in-flight ids,
 queue depth by status, last tick age, and last error.
