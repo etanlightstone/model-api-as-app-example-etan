@@ -11,6 +11,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core import settings
+
+# Domino tags every registered model with the project that created it. Filtering
+# on this tag scopes the picker to "models in this project's registry" — the same
+# set the project's Models nav shows — instead of every model on the platform.
+_PROJECT_ID_TAG = "mlflow.domino.project_id"
+
 
 @dataclass
 class RegisteredModelInfo:
@@ -36,16 +43,28 @@ def _client():
     return MlflowClient()
 
 
-def list_models(max_models: int = 200) -> RegistryListing:
-    """List registered models and their versions from the project registry."""
+def list_models(max_models: int = 200, project_only: bool = True) -> RegistryListing:
+    """List registered models and their versions from the project registry.
+
+    By default the listing is scoped to the current Domino project (via the
+    ``mlflow.domino.project_id`` tag) so the picker matches the project's Models
+    nav. When the project id is unknown — or ``project_only`` is False — fall back
+    to the full platform-wide listing the MLflow client can see.
+    """
     try:
         client = _client()
     except Exception as exc:  # noqa: BLE001
         return RegistryListing(error=f"MLflow unavailable: {exc}", available=False)
 
+    filter_string = None
+    if project_only and settings.PROJECT_ID:
+        filter_string = f"tags.`{_PROJECT_ID_TAG}` = '{settings.PROJECT_ID}'"
+
     try:
         listing: list[RegisteredModelInfo] = []
-        registered = client.search_registered_models(max_results=max_models)
+        registered = client.search_registered_models(
+            filter_string=filter_string, max_results=max_models
+        )
         for rm in registered:
             versions = sorted(
                 (mv.version for mv in getattr(rm, "latest_versions", []) or []),
