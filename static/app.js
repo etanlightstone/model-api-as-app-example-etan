@@ -32,6 +32,74 @@ if (whereToggle) {
   });
 }
 
+// --- Mode toggle: show the sync OR the async endpoint cards ---------------
+const modeToggle = document.getElementById("mode-toggle");
+if (modeToggle) {
+  const applyMode = () => {
+    const mode = modeToggle.value; // "sync" | "async"
+    document.querySelectorAll("[data-ep-group]").forEach((el) => {
+      el.hidden = el.dataset.epGroup !== mode;
+    });
+  };
+  modeToggle.addEventListener("change", applyMode);
+  applyMode();
+}
+
+// --- Copy to clipboard ----------------------------------------------------
+function showToast(msg, bad) {
+  let t = document.getElementById("toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => (t.className = "toast"), 2000);
+}
+
+async function copyText(text) {
+  // Prefer the async Clipboard API; fall back to a hidden-textarea + execCommand
+  // for non-secure contexts (e.g. plain-HTTP dev) where it's unavailable.
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) { /* fall through */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+document.querySelectorAll(".copy-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const wrap = btn.closest(".copy-wrap");
+    const src = wrap && wrap.querySelector(".copy-src");
+    if (!src) return;
+    // textContent reflects the live value (post base-substitution + curl toggle).
+    const ok = await copyText(src.textContent.trim());
+    if (ok) {
+      btn.classList.add("copied");
+      showToast("Copied to clipboard");
+      setTimeout(() => btn.classList.remove("copied"), 1400);
+    } else {
+      showToast("Copy failed", true);
+    }
+  });
+});
+
 // --- Playground -----------------------------------------------------------
 const form = document.getElementById("pg-form");
 

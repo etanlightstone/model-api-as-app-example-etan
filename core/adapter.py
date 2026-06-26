@@ -38,6 +38,21 @@ from core.schema import Field, Schema
 _SIBLING_NAMES = ("model", "predict", "pyfunc_model")
 
 
+def _purge_sibling_modules() -> None:
+    """Drop cached generic-named modules so the next load re-imports its own.
+
+    The example models bundle modules with identical names (``model.py``,
+    ``predict.py``, ``pyfunc_model.py``). MLflow *prepends* a registry model's
+    bundled ``code/`` dir to ``sys.path`` but never clears ``sys.modules`` — so a
+    sibling cached by an earlier load shadows the one being loaded, and
+    unpickling the pyfunc fails with e.g. ``Can't get attribute
+    'WeatherRegressor' on module 'pyfunc_model'``. Popping the names forces the
+    import machinery to re-resolve them from MLflow's freshly-prepended dir.
+    """
+    for name in _SIBLING_NAMES:
+        sys.modules.pop(name, None)
+
+
 def slugify(name: str) -> str:
     """A URL-safe slug for the route prefix, e.g. 'Weather Regressor' → 'weather-regressor'."""
     s = re.sub(r"[^a-zA-Z0-9]+", "-", str(name)).strip("-").lower()
@@ -328,6 +343,9 @@ class RegistryAdapter(ModelAdapter):
         import mlflow.pyfunc
 
         uri = self._uri()
+        # Make MLflow import THIS model's bundled code, not a same-named module
+        # cached by a previously loaded model (see _purge_sibling_modules).
+        _purge_sibling_modules()
         self._model = mlflow.pyfunc.load_model(uri)
         self.description = f"Registered MLflow model ({uri})"
         self.schema = self._schema_from_signature()

@@ -11,61 +11,71 @@
 {% else %}
 <section class="model-head">
   <h1>Settings</h1>
-  <p class="muted">Pick the model this app hosts. Saving warms the model and
-  lights up the endpoints live.</p>
+  <p class="muted">Configure the model this app hosts. Deploying warms the model and lights up the endpoints live.</p>
 </section>
 
-<section class="card">
-  <h2>Current selection</h2>
-  {% if state.configured %}
-    <p>Hosting <strong>{{ state.display_name }}</strong>
-       (slug <code>{{ state.slug }}</code>, source {{ state.source_type }}) —
-       {% if state.ready %}<span class="ok">ready</span>{% else %}<span class="bad">not loaded</span>{% endif %}.</p>
-    {% if state.error %}<pre class="error-box">{{ state.error }}</pre>{% endif %}
-    <button class="btn" id="btn-clear">Clear selection</button>
-  {% else %}
-    <p class="muted">Nothing configured yet.</p>
-  {% endif %}
-</section>
+<script>window.INIT_STATE = {{ settings_init_json | safe }};</script>
 
-<section class="card">
-  <h2>Registry model</h2>
-  <p class="muted">Choose a registered model; its MLflow signature defines the schema.</p>
-  <div id="registry-status" class="muted">Loading registered models…</div>
-  <div class="form-row">
-    <label>Model</label>
-    <select id="reg-model"></select>
-  </div>
-  <div class="form-row">
-    <label>Version</label>
-    <select id="reg-version"></select>
-  </div>
-  <div class="form-row">
-    <label>Display name</label>
-    <input type="text" id="reg-display" placeholder="(defaults to model name)" />
-  </div>
-  <button class="btn btn-primary" id="btn-save-registry">Host this registry model</button>
-</section>
+<section class="card" id="hosting-card">
 
-<section class="card">
-  <h2>Custom function</h2>
-  <p class="muted">Point at a <code>file.py</code> + function (e.g.
-  <code>example/weather_regressor/model_api.py</code> → <code>predict</code>).
-  The schema is inferred from the typed signature; a <code>model_app.yaml</code>
-  next to the file can override it.</p>
-  <div class="form-row">
-    <label>File path</label>
-    <input type="text" id="fn-path" placeholder="example/weather_regressor/model_api.py" />
+  <!-- Status panel: shown when a model is hosted -->
+  <div id="status-panel" style="display:none">
+    <div class="card-head-row">
+      <h2>Model hosting</h2>
+      <div class="status-actions">
+        <button class="btn" id="btn-edit">Edit</button>
+        <button class="btn btn-danger" id="btn-stop">Stop</button>
+      </div>
+    </div>
+    <div class="status-row" id="status-row"></div>
+    <pre class="error-box" id="status-error" style="display:none"></pre>
   </div>
-  <div class="form-row">
-    <label>Function</label>
-    <input type="text" id="fn-name" value="predict" />
+
+  <!-- Config panel: shown when nothing is hosted or when editing -->
+  <div id="config-panel">
+    <h2>Model hosting</h2>
+    <div class="form-row">
+      <label>Model location</label>
+      <div class="seg-control">
+        <button class="seg-btn active" data-tab="registry">Registered model</button>
+        <button class="seg-btn" data-tab="function">Custom function</button>
+      </div>
+    </div>
+
+    <div id="registry-fields">
+      <p class="muted" id="registry-status">Loading registered models…</p>
+      <div class="form-row">
+        <label>Model</label>
+        <select id="reg-model"></select>
+      </div>
+      <div class="form-row">
+        <label>Version</label>
+        <select id="reg-version"></select>
+      </div>
+      <div class="form-row">
+        <label>Display name</label>
+        <input type="text" id="reg-display" placeholder="(defaults to model name)" />
+      </div>
+    </div>
+
+    <div id="function-fields" style="display:none">
+      <div class="form-row">
+        <label>File path</label>
+        <input type="text" id="fn-path" placeholder="example/weather_regressor/model_api.py" />
+      </div>
+      <div class="form-row">
+        <label>Function</label>
+        <input type="text" id="fn-name" value="predict" />
+      </div>
+      <div class="form-row">
+        <label>Display name</label>
+        <input type="text" id="fn-display" placeholder="(defaults to folder name)" />
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-deploy">Deploy model</button>
+    <pre class="error-box load-error" id="deploy-error"></pre>
   </div>
-  <div class="form-row">
-    <label>Display name</label>
-    <input type="text" id="fn-display" placeholder="(defaults to folder name)" />
-  </div>
-  <button class="btn btn-primary" id="btn-save-function">Host this function</button>
 </section>
 
 <section class="card">

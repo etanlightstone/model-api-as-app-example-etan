@@ -44,11 +44,15 @@ def async_curl(base: str, slug: str, schema: Schema, *, in_workload: bool = True
         token_line = f'TOKEN=$(curl -s {settings.TOKEN_PROXY_URL})'
     else:
         token_line = 'TOKEN="<paste a Domino Personal Access Token>"'
+    if in_workload:
+        poll_auth = f'"Authorization: Bearer $(curl -s {settings.TOKEN_PROXY_URL})"'
+    else:
+        poll_auth = '"Authorization: Bearer $TOKEN"'
     return (
         f"{token_line}\n"
         f'BASE="{abase}"\n\n'
         f'ID=$(curl -s -X POST "$BASE" \\\n'
         f"  -H 'Content-Type: application/json' -H \"Authorization: Bearer $TOKEN\" \\\n"
         f"  -d '{body}' | jq -r .asyncPredictionId)\n\n"
-        f'curl -s "$BASE/$ID" -H "Authorization: Bearer $TOKEN"   # repeat until status is terminal'
+        f'curl -s "$BASE/$ID" -H {poll_auth}   # repeat until status is terminal'
     )

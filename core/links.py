@@ -43,3 +43,23 @@ def sync_url(base: str, slug: str) -> str:
 
 def async_base(base: str, slug: str) -> str:
     return f"{base}/api/modelApis/async/v1/{slug}"
+
+
+def registry_model_url(host: str, owner: str, project: str, model_name: str,
+                       version: str | None = None) -> str:
+    """A browser link to a registered model's page in the Domino model registry.
+
+    Unlike the API/playground URLs this is *not* proxy-relative: the registry
+    lives at the Domino root, not under the app's prefix, so we build it from the
+    externally-reachable host. Returns "" when any required piece is missing so
+    the caller can simply omit the link rather than render a broken one.
+    """
+    if not (host and owner and project and model_name):
+        return ""
+    from urllib.parse import quote
+
+    url = (f"{host.rstrip('/')}/u/{quote(owner, safe='')}/{quote(project, safe='')}"
+           f"/model-registry/{quote(model_name, safe='')}")
+    if version:
+        url += f"?version={quote(str(version), safe='')}"
+    return url
