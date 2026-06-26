@@ -194,14 +194,18 @@ def main() -> None:
         # Domino can auto-wrap it as a Model API directly from the registry.
         here = os.path.dirname(os.path.abspath(__file__))
 
-        # Compute the output schema from a real (numeric) prediction, but log
-        # the INPUT example as strings so the deployed signature accepts the
-        # string-valued payloads Domino forwards. The pyfunc coerces them back.
+        # Log the signature with the REAL column types (numeric features stay
+        # numeric, `state` stays a string). A numeric signature is the *more*
+        # permissive contract: MLflow coerces quoted strings ("5.0") to the
+        # declared numeric type, so the endpoint accepts both native JSON numbers
+        # and the string-valued payloads Domino may forward — and the pyfunc
+        # coerces again before scoring. (Casting the numerics to strings instead
+        # makes MLflow *reject* native numbers and forces every caller to quote.)
         numeric_example = X_val.head(2).reset_index(drop=True)
         output_example = pd.DataFrame(
             np.round(pipeline.predict(numeric_example), 2), columns=args.targets
         )
-        input_example = numeric_example.astype(str)
+        input_example = numeric_example
         signature = infer_signature(input_example, output_example)
 
         mlflow.pyfunc.log_model(

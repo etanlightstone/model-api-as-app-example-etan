@@ -136,24 +136,25 @@ input/output schema and **auto-wraps** it as an endpoint — no scoring code.
 Schema Domino auto-wraps to:
 
 ```
-inputs : month, week_of, precipitation, wind_speed, wind_direction, state  (all string)
+inputs : month, week_of, precipitation, wind_speed, wind_direction (double),
+         state (string)
 outputs: avg_temp (double), max_temp (double), min_temp (double)
 ```
 
-Inputs are typed as **string** on purpose (see note below). Domino fronts the
-registry endpoint with the **same `{"data": {...}}` envelope** as the
-custom-code path, forwarding values verbatim — so the identical request works on
-both:
+Each input carries its real type — the numeric features as numbers, `state` as a
+string (see note below). Domino fronts the registry endpoint with the **same
+`{"data": {...}}` envelope** as the custom-code path, so the identical request
+works on both:
 
 ```json
 {
   "data": {
-    "month": "7",
-    "week_of": "28",
+    "month": 7,
+    "week_of": 28,
     "state": "Alabama",
-    "precipitation": "0.1",
-    "wind_speed": "5.0",
-    "wind_direction": "20"
+    "precipitation": 0.1,
+    "wind_speed": 5.0,
+    "wind_direction": 20
   }
 }
 ```
@@ -164,10 +165,13 @@ Response (Domino adds `release` / `timing` / `request_id` metadata around it):
 { "avg_temp": 83.24, "max_temp": 93.28, "min_temp": 72.6 }
 ```
 
-> **Why string inputs?** Domino forwards request values verbatim and they arrive
-> as strings. MLflow enforces the signature strictly and will not coerce
-> string→number (or number→string), so the model declares a string input schema
-> and converts internally. This makes one payload work for both deploy paths.
+> **Numbers or strings?** The numeric features are logged with their real numeric
+> types, which is the more permissive contract: MLflow coerces quoted strings
+> (`"5.0"`) to the declared numeric type, so the endpoint accepts **both** native
+> JSON numbers *and* string-valued payloads, and the pyfunc coerces once more
+> before scoring. (Casting the numerics to `string` instead would make MLflow
+> *reject* native numbers and force every caller to quote.) `state` is a genuine
+> string and stays one.
 
 > **Why pyfunc and not `mlflow.sklearn.log_model`?** The pyfunc returns the
 > predictions as **named columns** (`avg_temp`/`max_temp`/`min_temp`) rather

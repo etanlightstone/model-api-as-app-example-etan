@@ -281,10 +281,14 @@ def main() -> None:
             {"diabetes_probability": np.round(_p, 4), "is_diabetic": (_p >= 0.5)}
         )
 
-        # Log the INPUT example as strings so the deployed signature accepts the
-        # string-valued payloads Domino forwards (it passes request values
-        # verbatim); the pyfunc coerces them back to numbers before scoring.
-        input_example = numeric_example.astype(str)
+        # Log the signature with the REAL numeric column types. A numeric
+        # signature is the *more* permissive contract, not the less: MLflow
+        # coerces quoted strings ("3000.0") to the declared numeric type, so the
+        # endpoint accepts both native JSON numbers and the string-valued
+        # payloads Domino may forward — and the pyfunc coerces to float once more
+        # before scoring. (Declaring these columns as strings instead makes
+        # MLflow *reject* native numbers and forces every caller to quote.)
+        input_example = numeric_example
         signature = infer_signature(input_example, output_example)
 
         mlflow.pyfunc.log_model(

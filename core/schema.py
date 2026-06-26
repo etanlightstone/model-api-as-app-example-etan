@@ -155,10 +155,12 @@ def example_record(schema: Schema) -> dict:
         ex = f.example
         if ex is None:
             ex = "" if f.image else _EXAMPLE_BY_TYPE.get(f.type, "example")
-        # Domino forwards values as strings; show numbers as strings in examples
-        # so the copy/paste payload matches what a real Model API receives.
-        if f.type in ("number", "integer") and not f.image:
-            ex = str(ex)
+        # Show each value with its native JSON type — numbers unquoted. A field
+        # only renders as a quoted string when its declared type really is
+        # string. Numeric fields accept both forms (pydantic + MLflow coerce
+        # quoted strings), so the natural-looking unquoted payload is the one to
+        # show. Note: a model logged with an all-string signature will still show
+        # quoted values here — because every field genuinely is typed string.
         out[f.name] = ex
     return out
 
