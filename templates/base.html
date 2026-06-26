@@ -21,7 +21,7 @@
   </header>
 
   <nav class="page-tabs" aria-label="Main navigation">
-    <div class="page-tabs-inner">
+    <div class="page-tabs-inner {{ self.main_extra() }}">
       <a class="tab-link{% if active_tab == 'endpoints' %} active{% endif %}" href=".">Endpoints</a>
       {% if state.ready %}<a class="tab-link" id="tab-playground" href="#playground">Playground</a>{% endif %}
       {% if caller.is_owner %}<a class="tab-link{% if active_tab == 'settings' %} active{% endif %}" href="settings">Settings</a>{% endif %}
