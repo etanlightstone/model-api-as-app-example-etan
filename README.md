@@ -59,6 +59,14 @@ app authentication — everyone who can reach it has already authenticated.
 uvicorn app:app --host 0.0.0.0 --port 8888 --proxy-headers --forwarded-allow-ips '*'
 ```
 
+> **Pick an environment with your model's deps.** The app loads the hosted model
+> *in its own container*, so the app's Compute Environment must include that
+> model's runtime dependencies. The bundled `requirements.txt` ships
+> `torch` + `scikit-learn` for the examples; if you host a different registry
+> flavor (XGBoost, LightGBM, TensorFlow, …) add its package — and trim the ones
+> you don't use. A missing dep surfaces as a load error in **Settings** when you
+> select the model.
+
 On first load the app shows **"This model endpoint is not set up yet."**
 
 ### 2. Configure the model (owner only)
