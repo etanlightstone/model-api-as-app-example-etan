@@ -6,23 +6,32 @@
   <!-- Resolve every relative URL against the app root, regardless of the
        (unknown) reverse-proxy prefix the browser actually used. -->
   <base href="{{ base_href }}" />
-  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <title>{% block title %}{{ app_title }} — Domino{% endblock %}</title>
   <link rel="stylesheet" href="static/style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <span class="brand-mark">◆</span>
-        <span class="brand-name">{{ app_title }}</span>
+        <!-- Domino logo mark (diamond) -->
+        <svg class="brand-mark-svg" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <path d="M10 1L19 10L10 19L1 10Z" fill="#EF4923"/>
+        </svg>
+        <span class="brand-domino">Domino</span>
+        <span class="brand-divider"></span>
+        <span class="brand-app">{{ app_title }}</span>
       </div>
-      <nav class="topnav">
-        <a href=".">Endpoints</a>
-        {% if state.ready %}<a href="#playground">Playground</a>{% endif %}
-        {% if caller.is_owner %}<a href="settings">Settings</a>{% endif %}
-      </nav>
     </div>
   </header>
+
+  <nav class="page-tabs" aria-label="Main navigation">
+    <div class="page-tabs-inner">
+      <a class="tab-link{% if active_tab == 'endpoints' %} active{% endif %}" href=".">Endpoints</a>
+      {% if state.ready %}<a class="tab-link" id="tab-playground" href="#playground">Playground</a>{% endif %}
+      {% if caller.is_owner %}<a class="tab-link{% if active_tab == 'settings' %} active{% endif %}" href="settings">Settings</a>{% endif %}
+    </div>
+  </nav>
+
   <main class="container">
     {% block content %}{% endblock %}
   </main>
@@ -30,5 +39,20 @@
     <span>Hosted as a Domino App · API-compatible with Domino Model APIs</span>
   </footer>
   {% block scripts %}{% endblock %}
+  <script>
+    // Keep Playground tab in sync with the #playground hash
+    (function () {
+      var playTab = document.getElementById("tab-playground");
+      if (!playTab) return;
+      var endTab = playTab.parentElement.querySelector('a.tab-link[href="."]');
+      function sync() {
+        var atPlay = window.location.hash === "#playground";
+        playTab.classList.toggle("active", atPlay);
+        if (endTab) endTab.classList.toggle("active", !atPlay);
+      }
+      sync();
+      window.addEventListener("hashchange", sync);
+    })();
+  </script>
 </body>
 </html>

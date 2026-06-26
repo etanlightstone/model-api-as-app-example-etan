@@ -67,13 +67,16 @@ def _context(request: Request) -> dict:
     # We can't know the external prefix server-side; emit a placeholder for any
     # absolute URL and let the browser fill it from document.baseURI.
     base = links.APP_BASE_PLACEHOLDER
+    path = request.url.path.rstrip("/")
+    active_tab = "settings" if path.endswith("settings") else "endpoints"
     ctx = {
         "request": request,
         "state": st,
         "caller": caller,
         "base": base,
         "base_href": links.base_href(request),
-        "app_title": "Model API (as App)",
+        "app_title": "Model host app",
+        "active_tab": active_tab,
     }
     adapter = state.get_adapter()
     if st.ready and adapter is not None:

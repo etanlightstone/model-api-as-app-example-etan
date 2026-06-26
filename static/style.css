@@ -27,12 +27,22 @@ code { font-family: var(--mono); font-size: 0.9em; background: #EEF1F6; padding:
 pre { font-family: var(--mono); font-size: 13px; background: #0E1726; color: #E6EDF6;
       padding: 14px 16px; border-radius: var(--radius); overflow-x: auto; white-space: pre; }
 
-.topbar { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
-.topbar-inner { max-width: 980px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; }
-.brand-mark { color: var(--domino-blue); font-size: 18px; }
-.topnav a { margin-left: 20px; color: var(--ink-soft); font-weight: 500; }
-.topnav a:hover { color: var(--domino-blue); }
+/* Dark Domino header */
+.topbar { background: #141822; border-bottom: none; position: sticky; top: 0; z-index: 10; }
+.topbar-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; height: 52px; display: flex; align-items: center; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark-svg { flex-shrink: 0; display: block; }
+.brand-domino { color: #fff; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.2); flex-shrink: 0; }
+.brand-app { color: rgba(255,255,255,0.45); font-size: 13px; font-weight: 400; }
+
+/* Ant Design-style page tabs */
+.page-tabs { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 52px; z-index: 9; }
+.page-tabs-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; display: flex; align-items: flex-end; }
+.tab-link { display: inline-block; padding: 12px 2px; margin-right: 28px; font-size: 14px; font-weight: 500; color: rgba(0,0,0,0.45); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color .15s, border-color .15s; }
+.tab-link:last-child { margin-right: 0; }
+.tab-link:hover { color: var(--domino-blue); text-decoration: none; }
+.tab-link.active { color: var(--domino-blue); border-bottom-color: var(--domino-blue); font-weight: 600; }
 
 .container { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
 .footer { max-width: 980px; margin: 0 auto; padding: 18px 20px 40px; color: var(--muted); font-size: 13px; }
