@@ -136,38 +136,42 @@ and **auto-wraps** it as an endpoint — you don't write any scoring code.
    the schema + a `requirements.txt`.)
 2. **Model Registry** → the registered version → **Deploy** as a Model API.
 
-Schema Domino auto-wraps to:
+Schema Domino auto-wraps to (inputs are typed as **string** on purpose — see
+note below — and the pyfunc coerces them to numbers before scoring):
 
 ```
 inputs : calories_wk, hrs_exercise_wk, exercise_intensity,
-         annual_income, num_children, weight   (all double)
+         annual_income, num_children, weight   (all string)
 outputs: diabetes_probability (float), is_diabetic (boolean)
 ```
 
-The auto-wrapped model speaks MLflow's standard scoring format. Request:
+Domino fronts the registry endpoint with the **same `{"data": {...}}` envelope**
+as the custom-code path, forwarding the values verbatim — so the identical
+request works on both:
 
 ```json
 {
-  "dataframe_records": [
-    { "calories_wk": 3000.0, "hrs_exercise_wk": 5.0, "exercise_intensity": 0.8,
-      "annual_income": 120000.0, "num_children": 0.0, "weight": 150.0 }
-  ]
+  "data": {
+    "calories_wk": "3000.0",
+    "hrs_exercise_wk": "5.0",
+    "exercise_intensity": "0.8",
+    "annual_income": "120000.0",
+    "num_children": "0.0",
+    "weight": "150.0"
+  }
 }
 ```
 
-Response:
+Response (Domino adds `release` / `timing` / `request_id` metadata around it):
 
 ```json
-{ "predictions": [ { "diabetes_probability": 0.0067, "is_diabetic": false } ] }
+{ "diabetes_probability": 0.0067, "is_diabetic": false }
 ```
 
-> **Confirm the request envelope for your Domino version.** The above is the
-> native MLflow scoring schema; depending on how Domino fronts registry models,
-> the body may instead be wrapped (e.g. under `data`). Check the endpoint's
-> **Overview**/sample-request tab once deployed.
-
-> **Send feature values as numbers (floats).** MLflow enforces the signature
-> strictly and will not coerce, e.g., a JSON integer into a `double` column.
+> **Why string inputs?** Domino forwards request values verbatim and they
+> arrive as strings. MLflow enforces the signature strictly and will not coerce
+> string→number (or number→string), so the model declares a string input schema
+> and converts internally. This makes one payload work for both deploy paths.
 
 > **Why pyfunc and not `mlflow.pytorch.log_model`?** Logging the bare network
 > would serve only the `DiabetesNet` — no scaler and no schema — so it would

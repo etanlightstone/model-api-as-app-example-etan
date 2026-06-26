@@ -136,36 +136,38 @@ input/output schema and **auto-wraps** it as an endpoint — no scoring code.
 Schema Domino auto-wraps to:
 
 ```
-inputs : month (long), week_of (long), wind_direction (long),
-         precipitation (double), wind_speed (double), state (string)
+inputs : month, week_of, precipitation, wind_speed, wind_direction, state  (all string)
 outputs: avg_temp (double), max_temp (double), min_temp (double)
 ```
 
-The auto-wrapped model speaks MLflow's standard scoring format. Request:
+Inputs are typed as **string** on purpose (see note below). Domino fronts the
+registry endpoint with the **same `{"data": {...}}` envelope** as the
+custom-code path, forwarding values verbatim — so the identical request works on
+both:
 
 ```json
 {
-  "dataframe_records": [
-    { "month": 7, "week_of": 28, "wind_direction": 20,
-      "precipitation": 0.1, "wind_speed": 5.0, "state": "Alabama" }
-  ]
+  "data": {
+    "month": "7",
+    "week_of": "28",
+    "state": "Alabama",
+    "precipitation": "0.1",
+    "wind_speed": "5.0",
+    "wind_direction": "20"
+  }
 }
 ```
 
-Response:
+Response (Domino adds `release` / `timing` / `request_id` metadata around it):
 
 ```json
-{ "predictions": [ { "avg_temp": 83.24, "max_temp": 93.28, "min_temp": 72.6 } ] }
+{ "avg_temp": 83.24, "max_temp": 93.28, "min_temp": 72.6 }
 ```
 
-> **Confirm the request envelope for your Domino version.** The above is the
-> native MLflow scoring schema; depending on how Domino fronts registry models,
-> the body may instead be wrapped (e.g. under `data`). Check the endpoint's
-> **Overview**/sample-request tab once deployed.
-
-> **Match the signature types.** MLflow enforces the schema strictly: send the
-> integer features (`month`, `week_of`, `wind_direction`) as integers and the
-> rest (`precipitation`, `wind_speed`) as numbers with a decimal point.
+> **Why string inputs?** Domino forwards request values verbatim and they arrive
+> as strings. MLflow enforces the signature strictly and will not coerce
+> string→number (or number→string), so the model declares a string input schema
+> and converts internally. This makes one payload work for both deploy paths.
 
 > **Why pyfunc and not `mlflow.sklearn.log_model`?** The pyfunc returns the
 > predictions as **named columns** (`avg_temp`/`max_temp`/`min_temp`) rather

@@ -266,12 +266,12 @@ def main() -> None:
         # artifact so the served model is fully self-contained.
         here = os.path.dirname(os.path.abspath(__file__))
 
-        input_example = pd.DataFrame(
+        numeric_example = pd.DataFrame(
             [dict(zip(FEATURE_COLUMNS, [8000.0, 2.5, 0.6, 60000.0, 1.0, 180.0]))]
         )
 
         # Run the in-memory net/scaler once to pin down the output schema.
-        _xs = (input_example[FEATURE_COLUMNS].to_numpy(np.float32)
+        _xs = (numeric_example[FEATURE_COLUMNS].to_numpy(np.float32)
                - scaler.mean_) / scaler.scale_
         with torch.no_grad():
             _p = torch.softmax(
@@ -280,6 +280,11 @@ def main() -> None:
         output_example = pd.DataFrame(
             {"diabetes_probability": np.round(_p, 4), "is_diabetic": (_p >= 0.5)}
         )
+
+        # Log the INPUT example as strings so the deployed signature accepts the
+        # string-valued payloads Domino forwards (it passes request values
+        # verbatim); the pyfunc coerces them back to numbers before scoring.
+        input_example = numeric_example.astype(str)
         signature = infer_signature(input_example, output_example)
 
         mlflow.pyfunc.log_model(

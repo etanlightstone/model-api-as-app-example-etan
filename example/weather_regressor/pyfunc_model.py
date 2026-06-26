@@ -22,6 +22,8 @@ import pandas as pd
 
 import mlflow.pyfunc
 
+from model import CATEGORICAL_FEATURES, NUMERIC_FEATURES
+
 
 class WeatherRegressor(mlflow.pyfunc.PythonModel):
     """Pyfunc that owns the full scikit-learn pipeline + output naming."""
@@ -45,11 +47,19 @@ class WeatherRegressor(mlflow.pyfunc.PythonModel):
             A ``DataFrame`` with one column per predicted temperature target,
             one row per input sample.
         """
-        df = self._coerce(model_input)
+        df = self._coerce(model_input).copy()
 
         missing = [c for c in self._features if c not in df.columns]
         if missing:
             raise ValueError(f"Input is missing feature columns: {missing}")
+
+        # Domino forwards request values verbatim, and they typically arrive as
+        # strings (e.g. "7"). The model's signature is declared as strings to
+        # accept them; coerce each column to the type the pipeline expects.
+        for col in NUMERIC_FEATURES:
+            df[col] = pd.to_numeric(df[col])
+        for col in CATEGORICAL_FEATURES:
+            df[col] = df[col].astype(str)
 
         preds = np.asarray(self._pipeline.predict(df[self._features]))
         if preds.ndim == 1:

@@ -194,10 +194,14 @@ def main() -> None:
         # Domino can auto-wrap it as a Model API directly from the registry.
         here = os.path.dirname(os.path.abspath(__file__))
 
-        input_example = X_val.head(2).reset_index(drop=True)
+        # Compute the output schema from a real (numeric) prediction, but log
+        # the INPUT example as strings so the deployed signature accepts the
+        # string-valued payloads Domino forwards. The pyfunc coerces them back.
+        numeric_example = X_val.head(2).reset_index(drop=True)
         output_example = pd.DataFrame(
-            np.round(pipeline.predict(input_example), 2), columns=args.targets
+            np.round(pipeline.predict(numeric_example), 2), columns=args.targets
         )
+        input_example = numeric_example.astype(str)
         signature = infer_signature(input_example, output_example)
 
         mlflow.pyfunc.log_model(
