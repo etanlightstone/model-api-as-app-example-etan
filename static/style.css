@@ -30,9 +30,8 @@ pre { font-family: var(--mono); font-size: 13px; background: #0E1726; color: #E6
 /* Dark Domino header */
 .topbar { background: #141822; border-bottom: none; position: sticky; top: 0; z-index: 10; }
 .topbar-inner { max-width: 980px; margin: 0 auto; padding: 0 20px; height: 52px; display: flex; align-items: center; }
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark-svg { flex-shrink: 0; display: block; }
-.brand-domino { color: #fff; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo-svg { height: 20px; width: auto; display: block; flex-shrink: 0; }
 .brand-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.2); flex-shrink: 0; }
 .brand-app { color: rgba(255,255,255,0.45); font-size: 13px; font-weight: 400; }
 
