@@ -376,12 +376,12 @@ async def _heartbeat_loop(task_id: str) -> None:
 
 def _thread_classify(records: list[dict]) -> list[dict]:
     """Thread-backend compute path: validate + predict via the in-process adapter."""
-    from core.predict_service import validate_records
+    from core.predict_service import prepare_records
 
     adapter = state.get_adapter()
     if adapter is None:
         raise RuntimeError("No model loaded")
-    return adapter.predict(validate_records(adapter, records))
+    return adapter.predict(prepare_records(adapter, records))
 
 
 async def _flush(task_id, loop, items, end_offset, out_path) -> None:

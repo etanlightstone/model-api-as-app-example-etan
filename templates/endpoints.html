@@ -13,6 +13,11 @@
 
 <section class="card">
   <h2>Input fields</h2>
+  {% if passthrough %}
+  <p class="note">Schema could not be inferred for this model, so the endpoint
+  accepts <strong>arbitrary JSON</strong> and forwards it to the model unchanged
+  (no field validation). Send whatever shape the model expects.</p>
+  {% else %}
   <table class="schema-table">
     <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Example</th></tr></thead>
     <tbody>
@@ -27,6 +32,7 @@
       {% endfor %}
     </tbody>
   </table>
+  {% endif %}
   {% if output_fields %}
   <h2>Output fields</h2>
   <table class="schema-table">
@@ -84,7 +90,16 @@
 
   <form id="pg-form" class="pg-form"
         data-slug="{{ adapter.slug }}"
-        data-base="{{ base }}">
+        data-base="{{ base }}"
+        {% if passthrough %}data-raw="1"{% endif %}>
+    {% if passthrough %}
+    <div class="pg-field pg-raw-field">
+      <label for="pg-raw">Request record (JSON) — sent as <code>{"data": …}</code></label>
+      <textarea id="pg-raw" rows="6">{
+  "your_field": "your_value"
+}</textarea>
+    </div>
+    {% else %}
     {% for f in schema.inputs %}
     <div class="pg-field">
       <label for="pg-{{ f.name }}">{{ f.name }}
@@ -97,6 +112,7 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% endif %}
 
     <div class="pg-controls">
       <label class="pg-mode">

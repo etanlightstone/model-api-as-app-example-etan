@@ -65,8 +65,10 @@ pre { font-family: var(--mono); font-size: 13px; background: #0E1726; color: #E6
 .kv > span { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
 
 .toggle-where label { font-size: 13px; color: var(--muted); margin-right: 6px; }
-select, input[type=text], input[type=file] { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
-select:focus, input:focus { outline: 2px solid var(--domino-blue); border-color: var(--domino-blue); }
+select, input[type=text], input[type=file], textarea { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+textarea { font-family: var(--mono); font-size: 13px; width: 100%; resize: vertical; }
+.pg-raw-field { grid-column: 1 / -1; }
+select:focus, input:focus, textarea:focus { outline: 2px solid var(--domino-blue); border-color: var(--domino-blue); }
 
 .btn { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
        background: #fff; color: var(--ink); cursor: pointer; }

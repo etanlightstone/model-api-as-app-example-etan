@@ -166,6 +166,19 @@ thread against the in-process model instead (lighter; used by the test suite).
 | Image classifier | custom function, base64 `image` field | `example/image_classifier` |
 | Any registered MLflow model | registry signature → schema | — |
 
+**It's not limited to sklearn/PyTorch.** The registry path loads models with
+`mlflow.pyfunc.load_model()`, so *any* MLflow flavor that the registry can hold
+loads through the same interface — XGBoost, LightGBM, CatBoost, TensorFlow/Keras,
+ONNX, Prophet, statsmodels, Spark, and so on — the same mechanism Domino's own
+"deploy from registry" relies on. The custom-function path then covers anything
+else (arbitrary Python).
+
+**No signature? Still works.** If a registry model has no MLflow signature (or a
+function has no typed parameters), the app falls back to **passthrough mode**: it
+accepts arbitrary JSON, forwards it to the model unvalidated, and returns whatever
+the model produces. The UI shows a "schema unknown" note and a raw-JSON
+playground instead of a typed form.
+
 Images follow the Domino convention: a base64 string in a JSON field (no
 multipart). Mark the field with `image_fields:` in `model_app.yaml` and the
 playground renders a file picker that base64-encodes client-side.

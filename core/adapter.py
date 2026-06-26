@@ -200,6 +200,14 @@ class CustomFunctionAdapter(ModelAdapter):
             inputs.append(fld)
 
         schema = Schema(inputs=inputs, notes=overrides.get("notes", ""))
+        if not inputs:
+            # No typed parameters to introspect (e.g. predict(**kwargs)) — accept
+            # arbitrary JSON and forward it unvalidated.
+            schema.passthrough = True
+            schema.notes = (schema.notes or
+                            "Schema could not be inferred from the signature; this "
+                            "endpoint accepts arbitrary JSON (validation skipped).")
+            return schema
 
         # Output schema: prefer an explicit override; else probe with one example
         # call so the docs show the real output field names/types.
@@ -272,10 +280,14 @@ class CustomFunctionAdapter(ModelAdapter):
             raise RuntimeError("Adapter not warmed up")
         out = []
         for rec in records:
-            kwargs = {}
-            for f in self.schema.inputs:
-                if f.name in rec:
-                    kwargs[f.name] = schema_mod.coerce_value(rec[f.name], f.type)
+            if self.schema.passthrough:
+                # Forward the whole record as kwargs; we don't know the types.
+                kwargs = dict(rec)
+            else:
+                kwargs = {}
+                for f in self.schema.inputs:
+                    if f.name in rec:
+                        kwargs[f.name] = schema_mod.coerce_value(rec[f.name], f.type)
             result = self._func(**kwargs)
             out.append(self._normalize_one(result))
         return out
@@ -331,7 +343,12 @@ class RegistryAdapter(ModelAdapter):
                 outputs = self._fields_from_mlflow_schema(sig.outputs, default_required=False)
         schema = Schema(inputs=inputs, outputs=outputs)
         if not inputs:
-            schema.notes = "No MLflow signature found on this model; inputs unknown."
+            # No signature (or an inputs-less one): forward arbitrary JSON to the
+            # pyfunc unvalidated rather than breaking the endpoint.
+            schema.passthrough = True
+            schema.notes = ("This model has no MLflow input signature; the endpoint "
+                            "accepts arbitrary JSON and forwards it to the model "
+                            "(validation skipped).")
         return schema
 
     @staticmethod

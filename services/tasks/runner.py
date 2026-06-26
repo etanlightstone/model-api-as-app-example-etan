@@ -44,9 +44,8 @@ def init_worker(source_type: str, params: dict, display_name: str, slug: str,
 
 def classify_chunk(records: list[dict]) -> list[dict]:
     """Pure compute: validate + predict a chunk of records. Runs in a worker."""
-    from core.predict_service import validate_records
+    from core.predict_service import prepare_records
 
     if _ADAPTER is None:
         raise RuntimeError("Worker model not initialized")
-    validated = validate_records(_ADAPTER, records)
-    return _ADAPTER.predict(validated)
+    return _ADAPTER.predict(prepare_records(_ADAPTER, records))

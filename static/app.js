@@ -28,6 +28,11 @@ function readFileAsBase64(file) {
 }
 
 async function collectRecord() {
+  // Passthrough models: a single raw-JSON textarea is the record.
+  if (form.dataset.raw === "1") {
+    const raw = document.getElementById("pg-raw").value;
+    return JSON.parse(raw); // throws on bad JSON → surfaced as an error
+  }
   const record = {};
   const inputs = form.querySelectorAll("[data-field]");
   for (const el of inputs) {

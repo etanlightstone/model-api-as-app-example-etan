@@ -79,6 +79,7 @@ def _context(request: Request) -> dict:
         ctx["example_record"] = example_record(adapter.input_schema)
         ctx["endpoints"] = _endpoint_descriptors(base, adapter)
         ctx["has_image"] = adapter.input_schema.has_image_input()
+        ctx["passthrough"] = adapter.input_schema.passthrough
     return ctx
 
 

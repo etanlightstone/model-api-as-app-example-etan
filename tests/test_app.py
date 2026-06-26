@@ -29,6 +29,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEATHER = os.path.join(REPO, "example/weather_regressor/model_api.py")
 DIABETES = os.path.join(REPO, "example/diabetes_classer/model_api.py")
 IMAGE = os.path.join(REPO, "example/image_classifier/model_api.py")
+PASSTHROUGH = os.path.join(REPO, "tests/fixtures/passthrough_model.py")
 
 
 def _make_image_b64(color=(40, 90, 230)):
@@ -236,6 +237,57 @@ class ImageClassifierTests(unittest.TestCase):
                               json={"data": {"image": _make_image_b64()}})
             self.assertEqual(pred.status_code, 200, pred.text)
             self.assertIn("label", pred.json()["result"])
+
+
+class PassthroughTests(unittest.TestCase):
+    def test_schema_marked_passthrough(self):
+        from core.adapter import CustomFunctionAdapter
+
+        a = CustomFunctionAdapter(PASSTHROUGH, "predict")
+        a.ensure_warm()
+        self.assertTrue(a.input_schema.passthrough)
+        self.assertEqual(a.input_schema.inputs, [])
+        # Arbitrary keys flow straight through to the model.
+        res = a.predict([{"anything": 1, "goes": "here"}])
+        self.assertEqual(res[0]["num_fields"], 2)
+        self.assertEqual(res[0]["received"]["goes"], "here")
+
+    def test_passthrough_endpoints(self):
+        _reset_db()
+        with TestClient(__import__("app").app) as client:
+            r = client.post("/settings/select", json={
+                "source_type": "custom_function", "file_path": PASSTHROUGH,
+                "func_name": "predict", "display_name": "Anything"})
+            self.assertEqual(r.status_code, 200, r.text)
+            slug = r.json()["slug"]
+
+            # UI shows the passthrough note + raw-JSON playground, not a field table.
+            html = client.get("/").text
+            self.assertIn("arbitrary JSON", html)
+            self.assertIn('data-raw="1"', html)
+
+            # Sync: any JSON shape is accepted and forwarded (no validation error).
+            sync = client.post(f"/models/{slug}/latest/model",
+                              json={"data": {"foo": "bar", "n": 3}})
+            self.assertEqual(sync.status_code, 200, sync.text)
+            self.assertEqual(sync.json()["result"]["received"]["foo"], "bar")
+
+            # Async by-value works the same way.
+            sub = client.post(f"/api/modelApis/async/v1/{slug}",
+                            json={"parameters": {"x": [1, 2, 3]}})
+            self.assertEqual(sub.status_code, 200, sub.text)
+            pid = sub.json()["asyncPredictionId"]
+            terminal = {"succeeded", "failed", "cancelled", "expired"}
+            deadline = time.time() + 30
+            body = None
+            while time.time() < deadline:
+                body = client.get(f"/api/modelApis/async/v1/{slug}/{pid}").json()
+                if body["status"] in terminal:
+                    break
+                time.sleep(0.5)
+            self.assertEqual(body["status"], "succeeded", body)
+            # The list-valued field was NOT columnar-expanded in passthrough mode.
+            self.assertEqual(body["result"]["received"]["x"], [1, 2, 3])
 
 
 class OwnerGatingTests(unittest.TestCase):

@@ -79,11 +79,19 @@ class Field:
 
 @dataclass
 class Schema:
-    """Ordered input + (best-effort) output field lists."""
+    """Ordered input + (best-effort) output field lists.
+
+    ``passthrough`` marks a schema we *couldn't* infer (no MLflow signature, an
+    untyped ``**kwargs`` function, etc.). In that mode the endpoint accepts
+    arbitrary JSON and forwards it to the model without field validation — the
+    same "we don't know the shape, so don't get in the way" behaviour the
+    registry's own deploy falls back to.
+    """
 
     inputs: list[Field] = field(default_factory=list)
     outputs: list[Field] = field(default_factory=list)
     notes: str = ""
+    passthrough: bool = False
 
     def input_names(self) -> list[str]:
         return [f.name for f in self.inputs]
@@ -139,6 +147,9 @@ def input_json_schema(schema: Schema) -> dict:
 
 def example_record(schema: Schema) -> dict:
     """An example input record (one value per field) for docs + playground."""
+    if schema.passthrough and not schema.inputs:
+        # Unknown shape — show a generic placeholder in docs/snippets.
+        return {"<field>": "<value>"}
     out = {}
     for f in schema.inputs:
         ex = f.example

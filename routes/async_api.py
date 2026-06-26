@@ -67,9 +67,11 @@ async def submit(slug: str, request: Request):
         return {"asyncPredictionId": task_id}
 
     # By-value: validate up front so bad input fails fast (like the sync route).
+    # In passthrough mode there's no schema to validate against — forward as-is.
+    passthrough = adapter.input_schema.passthrough
     try:
-        records, _ = normalize_records(params)
-        validated = validate_records(adapter, records)
+        records, _ = normalize_records(params, passthrough=passthrough)
+        validated = records if passthrough else validate_records(adapter, records)
     except ValidationError as exc:
         raise HTTPException(422, str(exc))
     try:
