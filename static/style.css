@@ -81,6 +81,9 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--domino-blue
 .empty-card h1 { font-size: 22px; margin-top: 0; }
 .error-note { color: var(--bad); }
 .error-box { background: #2A1416; color: #FFD9D4; }
+/* Inline load error shown under a save button (persists for copy/paste). */
+.load-error { display: none; margin-top: 14px; white-space: pre-wrap; word-break: break-word; }
+.load-error.show { display: block; }
 
 .pg-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .pg-field { display: flex; flex-direction: column; gap: 5px; }

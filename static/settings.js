@@ -9,6 +9,23 @@ function toast(msg, bad) {
   setTimeout(() => (t.className = "toast"), 2600);
 }
 
+// Persistent, copy-pasteable error shown inline under a save button. Used
+// instead of a toast when the form is still on screen after a failed click, so
+// the full message (e.g. a model load traceback) sticks around to copy.
+function showInlineError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+}
+
+function clearInlineError(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = "";
+  el.classList.remove("show");
+}
+
 async function postJSON(url, body) {
   const resp = await fetch(url, {
     method: "POST",
@@ -72,6 +89,7 @@ if (regModelSel) {
 const btnSaveReg = document.getElementById("btn-save-registry");
 if (btnSaveReg) {
   btnSaveReg.addEventListener("click", async () => {
+    clearInlineError("reg-error");
     btnSaveReg.disabled = true;
     const r = await postJSON("settings/select", {
       source_type: "registry",
@@ -84,7 +102,7 @@ if (btnSaveReg) {
       toast("Now hosting " + r.data.display_name);
       setTimeout(() => (window.location = document.baseURI), 900);
     } else {
-      toast(r.data.detail || "Failed to load model", true);
+      showInlineError("reg-error", r.data.detail || "Failed to load model");
     }
   });
 }
@@ -93,6 +111,7 @@ if (btnSaveReg) {
 const btnSaveFn = document.getElementById("btn-save-function");
 if (btnSaveFn) {
   btnSaveFn.addEventListener("click", async () => {
+    clearInlineError("fn-error");
     btnSaveFn.disabled = true;
     const r = await postJSON("settings/select", {
       source_type: "custom_function",
@@ -105,7 +124,7 @@ if (btnSaveFn) {
       toast("Now hosting " + r.data.display_name);
       setTimeout(() => (window.location = document.baseURI), 900);
     } else {
-      toast(r.data.detail || "Failed to load function", true);
+      showInlineError("fn-error", r.data.detail || "Failed to load function");
     }
   });
 }
