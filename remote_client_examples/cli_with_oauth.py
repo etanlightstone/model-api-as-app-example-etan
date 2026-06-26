@@ -292,10 +292,14 @@ def get_valid_token(force_login: bool = False) -> str:
     """
     state = load_state()
     if not state or not state.get("access_token") or not state.get("domino_url"):
-        host = (state or {}).get("domino_url") or _prompt_host()
+        host = (
+            os.environ.get("DOMINO_URL", "").rstrip("/")
+            or (state or {}).get("domino_url")
+            or _prompt_host()
+        )
         return store_tokens(host, browser_login(host))
 
-    host = state["domino_url"]
+    host = os.environ.get("DOMINO_URL", "").rstrip("/") or state["domino_url"]
     if not force_login and time.time() < state.get("expires_at", 0) - REFRESH_MARGIN:
         return state["access_token"]
 
