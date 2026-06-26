@@ -48,17 +48,19 @@ REFRESH_MARGIN = 30  # refresh this many seconds before the access token expires
 TOKEN_DIR = os.path.expanduser("~/.domino")
 TOKEN_FILE = os.path.join(TOKEN_DIR, "model_api_auth.json")
 
+# ** YOU WILL PROBABLY NEED TO CHANGE THIS PAYLOAD, CUT PASTE FROM THE REQUEST SHAPE
+# in the app hosting UI / playground.
 # The input record. Shape must match the model's schema (see the app's Endpoints
 # page for the exact fields and an example payload).
 PAYLOAD = {
-    "data": {
-        "month": "0",
-        "week_of": "0",
-        "state": "example",
-        "precipitation": "0.0",
-        "wind_speed": "0.0",
-        "wind_direction": "0.0",
-    }
+  "data": {
+    "annual_income": 70000,
+    "calories_wk": 4000,
+    "exercise_intensity": 0.2,
+    "hrs_exercise_wk": 2,
+    "num_children": 2,
+    "weight": 210
+  }
 }
 
 
