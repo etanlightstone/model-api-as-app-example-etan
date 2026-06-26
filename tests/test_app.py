@@ -335,6 +335,12 @@ class OwnerGatingTests(unittest.TestCase):
     def setUp(self):
         _reset_db()
 
+    def test_identifier_normalization_matches(self):
+        from core import identity as identity_mod
+        # username (underscore), email local-part (dot), and full email all match.
+        self.assertEqual(identity_mod._norm("etan_lightstone"), identity_mod._norm("etan.lightstone"))
+        self.assertTrue(identity_mod._norm("Etan-Lightstone") == identity_mod._norm("etanlightstone"))
+
     def test_non_owner_cannot_select(self):
         # Turn off dev-owner mode and provide an identity header that isn't the owner.
         os.environ["MODEL_APP_DEV_OWNER"] = "0"
