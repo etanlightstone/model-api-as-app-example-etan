@@ -131,6 +131,10 @@ the `Authorization: Bearer` header.
 - **From a laptop / CI**, paste a Personal Access Token in place of `$TOKEN`. The
   UI's "Calling from" toggle shows both forms.
 
+For ready-to-run off-platform client code, see
+[`remote_client_examples/`](remote_client_examples/README.md) — three scripts
+covering PAT auth, browser OAuth (sync), and browser OAuth (async submit/poll).
+
 ---
 
 ## Sync vs. async, and batch scope
