@@ -9,11 +9,13 @@ same-origin (the browser's Domino app-auth cookie carries auth).
 
 from __future__ import annotations
 
+import json
 import os
 
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
+from core import config as config_mod
 from core import identity, links, snippets, state
 from core.schema import example_record, input_json_schema
 
@@ -96,4 +98,15 @@ async def home(request: Request):
 @router.get("/settings")
 async def settings_page(request: Request):
     ctx = _context(request)
+    st = ctx["state"]
+    cfg = config_mod.get_config()
+    ctx["settings_init_json"] = json.dumps({
+        "configured": st.configured,
+        "ready": st.ready,
+        "displayName": st.display_name,
+        "slug": st.slug,
+        "sourceType": st.source_type,
+        "error": st.error or "",
+        "params": cfg.params if cfg else {},
+    })
     return _TEMPLATES.TemplateResponse(request, "settings.html", ctx)

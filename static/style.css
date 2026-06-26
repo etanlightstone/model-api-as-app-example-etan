@@ -107,3 +107,28 @@ select:focus, input:focus, textarea:focus { outline: 2px solid var(--domino-blue
          opacity: 0; pointer-events: none; transition: opacity .2s; }
 .toast.show { opacity: 1; }
 .toast.bad { background: var(--bad); }
+
+/* Settings: segmented control */
+.seg-control { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; width: fit-content; }
+.seg-btn { padding: 6px 16px; font: inherit; font-size: 14px; font-weight: 500; background: #fff; border: none; cursor: pointer; color: var(--ink-soft); transition: background .12s, color .12s; }
+.seg-btn.active { background: var(--domino-blue); color: #fff; }
+.seg-btn:not(.active):hover { background: var(--bg); color: var(--ink); }
+
+/* Settings: status row */
+.status-row { display: flex; align-items: center; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(30,142,90,0.15); }
+.status-dot.bad { background: var(--bad); box-shadow: 0 0 0 3px rgba(200,55,45,0.15); }
+.status-name { font-weight: 600; }
+.status-meta { color: var(--muted); font-size: 14px; }
+.status-badge { font-size: 12px; padding: 2px 9px; border-radius: 99px; font-weight: 600; }
+.status-badge.ok { background: rgba(30,142,90,0.1); color: var(--ok); }
+.status-badge.bad { background: rgba(200,55,45,0.1); color: var(--bad); }
+.status-actions { display: flex; gap: 8px; }
+
+/* Danger / stop button */
+.btn-danger { border-color: var(--bad); color: var(--bad); }
+.btn-danger:hover { background: var(--bad); color: #fff; border-color: var(--bad); }
+
+/* Loading button state */
+.btn-loading { opacity: 0.65; cursor: not-allowed; }
