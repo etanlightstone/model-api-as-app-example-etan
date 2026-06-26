@@ -1,9 +1,7 @@
-# For GPU support, install the CUDA build of torch instead of the CPU wheel:
-#   pip install torch
-# CPU-only:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
-torch
+scikit-learn
 pandas
 numpy
-scikit-learn
+joblib
 mlflow
+# Required by Domino for serving Model API endpoints:
+uwsgi

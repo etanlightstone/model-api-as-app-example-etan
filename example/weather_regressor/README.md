@@ -1,100 +1,180 @@
-# Weather Temperature Regressor (PyTorch) — Example
+# Weather Temperature Regressor (scikit-learn) — Example
 
-A small, end-to-end example of training and serving a PyTorch neural network
-that **predicts continuous temperature metrics** from weather features. It is
-the regression counterpart to the `diabetes_classer` classification example.
+An end-to-end example of training and serving a **scikit-learn** model that
+predicts temperature (average / max / min) from date, location and weather
+features, integrated with Domino's built-in MLflow tracking and registry.
 
-**Classification vs. regression:** the diabetes example predicts a discrete
-label (diabetic / not). This example predicts continuous numbers (temperature
-in °F) — and it's **multi-output**, predicting Avg / Max / Min temperature
-together by default. Train on a single target with `--targets` if you prefer.
+It mirrors the `diabetes_classer` example but is a **multi-output regression**
+problem built on a scikit-learn `Pipeline` instead of PyTorch.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `model.py` | Configurable MLP regressor (`WeatherNet`) + feature/target definitions. |
-| `train.py` | Training script — configurable arch & hyperparameters, MLflow tracking, saves model binary to disk. |
-| `predict.py` | Inference script — loads the binary from disk, uses GPU if available else CPU. |
-| `model_api.py` | Domino Model API entrypoint (`predict` function) for manual hosting. |
+| `model.py` | Feature/target definitions + `build_pipeline()` (preprocessing + `HistGradientBoostingRegressor`). |
+| `train.py` | Training script — MLflow tracking, saves the fitted pipeline to disk, logs a **signed pyfunc** to the registry. |
+| `predict.py` | Inference script — loads the pipeline bundle from disk. |
+| `pyfunc_model.py` | `mlflow.pyfunc` wrapper — the model deployed **from the registry entry**. |
+| `model_api.py` | Custom-code Model API entrypoint (`predict`) — the model deployed **from a file/function**. |
 | `requirements.txt` | Python dependencies. |
 
 ## Data
 
 Uses `weather.csv` from this project's dataset
-(`$DOMINO_DATASETS_DIR/$DOMINO_PROJECT_NAME/weather.csv`) — weekly US city
-weather for 2016–17.
+(`$DOMINO_DATASETS_DIR/$DOMINO_PROJECT_NAME/weather.csv`).
 
-- **Features:** `Date.Month`, `Date.Week of`, `Data.Precipitation`,
-  `Data.Wind.Speed`, `Data.Wind.Direction` (numeric, standardized) and
-  `Station.State` (categorical, one-hot encoded).
-- **Targets:** `Data.Temperature.Avg/Max/Min Temp` (continuous).
+The raw dataset columns (`Date.Month`, `Data.Temperature.Avg Temp`, …) are
+renamed to clean snake_case so the served APIs expose a friendly JSON schema:
 
-Numeric features are standardized and the state is one-hot encoded via a
-`ColumnTransformer`; targets are standardized for training and inverse-transformed
-back to °F for metrics and predictions. The fitted preprocessing is saved inside
-the model checkpoint so inference reproduces it exactly.
+| Role | Columns |
+| --- | --- |
+| Features | `month`, `week_of`, `precipitation`, `wind_speed`, `wind_direction`, `state` |
+| Targets | `avg_temp`, `max_temp`, `min_temp` (degrees F) |
+
+## Model
+
+A single scikit-learn `Pipeline`:
+
+```
+ColumnTransformer( StandardScaler(numeric) + OneHotEncoder(state) )
+  -> MultiOutputRegressor( HistGradientBoostingRegressor )
+```
+
+Gradient-boosted trees give strong accuracy (val R² ≈ 0.89) while keeping the
+serialized model small (~3 MB) — which matters when it is bundled into the
+MLflow model and deployed. The preprocessing lives *inside* the pipeline, so the
+fitted estimator accepts raw feature values directly.
 
 ## Train
 
 ```bash
-# Defaults: net [64, 32], 60 epochs, predicts Avg/Max/Min temp
+# Defaults: predict avg/max/min temperature
 python train.py
 
-# Predict a single metric with a larger network, trained longer
-python train.py --targets "Data.Temperature.Avg Temp" \
-  --hidden-sizes 128 64 32 --epochs 80 --learning-rate 5e-4
+# More boosting iterations, only the average temperature
+python train.py --targets avg_temp --max-iter 800 --learning-rate 0.05
 ```
 
-Training logs params and per-epoch metrics (loss, plus MAE / RMSE / R² per
-target) to Domino's MLflow (experiment `weather-pytorch-<project>`) **and**
-writes the model binary to
-`$DOMINO_ARTIFACTS_DIR/weather_model/weather_model.pt` (override with
-`--output-dir`), with a `metadata.json` alongside.
+Training logs params/metrics to Domino's MLflow (experiment defaults to
+`weather-sklearn-<project>`), writes the fitted pipeline to
+`$DOMINO_ARTIFACTS_DIR/weather_model/weather_model.joblib`, and logs a signed
+pyfunc named `model` for registry deployment. Run `python train.py --help` for
+all options.
 
-Run `python train.py --help` for all options.
-
-## Predict
-
-Loads the on-disk binary and **uses a GPU when available, otherwise CPU**.
+## Predict (local CLI)
 
 ```bash
 # Demo: scores two built-in samples
 python predict.py
 
-# Single sample (named flags)
+# Single sample via named flags
 python predict.py --month 7 --week-of 28 --state Alabama \
-  --precipitation 0.1 --wind-speed 5.0 --wind-direction 20
+    --precipitation 0.1 --wind-speed 5.0 --wind-direction 20
 
 # Batch from a CSV (must contain the feature columns), write results
 python predict.py --input new_weather.csv --output predictions.csv
 ```
 
-## Host as a Domino Model API (manual)
+## Deploy as a Model API
 
-Publish a Model API pointed at:
+Two ways to serve this model in Domino. Both are included here.
 
-- **File:** `model_api.py`
-- **Function:** `predict`
+### Option A — Custom code (`model_api.py`)
 
-Request body:
+You point Domino at a file and function and write the scoring glue yourself.
+
+1. **Publish** → **Model APIs** → **New Model**
+2. File: `example/weather_regressor/model_api.py`, Function: `predict`
+3. Pick an environment with the deps in `requirements.txt` (including `uwsgi`).
+
+Domino wraps the request in a `data` object whose fields become the `predict()`
+keyword arguments. Values may be sent as strings — the function coerces them.
+
+Request:
 
 ```json
-{"month": 7, "week_of": 28, "state": "Alabama", "precipitation": 0.1, "wind_speed": 5.0, "wind_direction": 20}
+{
+  "data": {
+    "month": "7",
+    "week_of": "28",
+    "state": "Alabama",
+    "precipitation": "0.1",
+    "wind_speed": "5.0",
+    "wind_direction": "20"
+  }
+}
 ```
 
-Response maps each trained target to its predicted °F value. As with the
-diabetes example, ensure the `.pt` binary is reachable at `DEFAULT_MODEL_PATH`
-in the endpoint's environment (commit it to the repo or mount a dataset, since
-`/mnt/artifacts` is per-run).
+Response (the function's returned dict, under the response `result`):
+
+```json
+{ "avg_temp": 83.2, "max_temp": 93.3, "min_temp": 72.6 }
+```
+
+Call it with `curl` (find the URL + token on the endpoint's **Overview** tab):
+
+```bash
+curl -X POST "$MODEL_API_URL" \
+  -H "Authorization: Bearer $MODEL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"month": "7", "week_of": "28", "state": "Alabama", "precipitation": "0.1", "wind_speed": "5.0", "wind_direction": "20"}}'
+```
+
+This path loads the pipeline from
+`$DOMINO_ARTIFACTS_DIR/weather_model/weather_model.joblib` at import time.
+
+### Option B — From the registry entry (auto-wrapped, no scoring code)
+
+`train.py` logs a **signed `pyfunc`** (see `pyfunc_model.py`) that bundles the
+whole pipeline. Because it is logged **with a signature**, Domino reads the
+input/output schema and **auto-wraps** it as an endpoint — no scoring code.
+
+1. **Experiments** → open the training run → register the **`model`** logged
+   model (the signed pyfunc — it carries the schema + a `requirements.txt`).
+2. **Model Registry** → the registered version → **Deploy** as a Model API.
+
+Schema Domino auto-wraps to:
+
+```
+inputs : month (long), week_of (long), wind_direction (long),
+         precipitation (double), wind_speed (double), state (string)
+outputs: avg_temp (double), max_temp (double), min_temp (double)
+```
+
+The auto-wrapped model speaks MLflow's standard scoring format. Request:
+
+```json
+{
+  "dataframe_records": [
+    { "month": 7, "week_of": 28, "wind_direction": 20,
+      "precipitation": 0.1, "wind_speed": 5.0, "state": "Alabama" }
+  ]
+}
+```
+
+Response:
+
+```json
+{ "predictions": [ { "avg_temp": 83.24, "max_temp": 93.28, "min_temp": 72.6 } ] }
+```
+
+> **Confirm the request envelope for your Domino version.** The above is the
+> native MLflow scoring schema; depending on how Domino fronts registry models,
+> the body may instead be wrapped (e.g. under `data`). Check the endpoint's
+> **Overview**/sample-request tab once deployed.
+
+> **Match the signature types.** MLflow enforces the schema strictly: send the
+> integer features (`month`, `week_of`, `wind_direction`) as integers and the
+> rest (`precipitation`, `wind_speed`) as numbers with a decimal point.
+
+> **Why pyfunc and not `mlflow.sklearn.log_model`?** The pyfunc returns the
+> predictions as **named columns** (`avg_temp`/`max_temp`/`min_temp`) rather
+> than a bare array, so the endpoint response is self-describing.
 
 ## Setup
 
 ```bash
-# CPU-only torch
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install pandas numpy scikit-learn mlflow
-
-# For a GPU hardware tier, install the default CUDA build instead:
-pip install torch
+pip install scikit-learn pandas numpy joblib mlflow
+# uwsgi is required by Domino for serving Model API endpoints:
+pip install uwsgi
 ```

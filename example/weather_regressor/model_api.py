@@ -1,33 +1,26 @@
 """Domino Model API entrypoint for the weather temperature regressor.
 
-Point a Domino Model API at this file/function when hosting the model *without*
-the automated model-registry deployment:
+This is the *custom-code* path: point a Domino Model API at this file/function
+and Domino wraps it in a web server. Each request's JSON body is passed as
+keyword arguments, and the returned dict is serialized as the JSON response.
 
-    File:     model_api.py
+    File:     example/weather_regressor/model_api.py
     Function: predict
 
-Domino wraps this function in a web server: each request's JSON body is passed
-as keyword arguments, and the returned dict is serialized back as the JSON
-response. The model binary is loaded **once at import time** (not per request).
+The fitted pipeline is loaded **once at import time** (kept warm across
+requests). For the no-code alternative, register the signed pyfunc that
+``train.py`` logs and deploy it straight from the registry (see README).
 
 Example request body::
 
     {
-      "month": 7,
-      "week_of": 28,
-      "state": "Alabama",
-      "precipitation": 0.1,
-      "wind_speed": 5.0,
-      "wind_direction": 20
+      "month": 7, "week_of": 28, "state": "Alabama",
+      "precipitation": 0.1, "wind_speed": 5.0, "wind_direction": 20
     }
 
-Example response (depends on which targets the model was trained on)::
+Example response::
 
-    {
-      "Data.Temperature.Avg Temp": 82.7,
-      "Data.Temperature.Max Temp": 93.0,
-      "Data.Temperature.Min Temp": 72.1
-    }
+    { "avg_temp": 82.7, "max_temp": 93.0, "min_temp": 72.1 }
 
 Quick local test::
 
@@ -36,15 +29,21 @@ Quick local test::
 
 from __future__ import annotations
 
-import pandas as pd
-import torch
+import os
+import sys
 
+# Ensure the sibling modules (model.py, predict.py) import cleanly regardless of
+# the working directory Domino loads this Model API file from.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import pandas as pd
+
+from model import FEATURE_COLUMNS
 from predict import DEFAULT_MODEL_PATH, load_model, predict as _predict
 
 
 # ---- Load once at import (kept warm across requests) ----
-_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_BUNDLE = load_model(DEFAULT_MODEL_PATH, _DEVICE)
+_PIPELINE, _FEATURE_COLUMNS, _TARGETS = load_model(DEFAULT_MODEL_PATH)
 
 
 def predict(
@@ -57,30 +56,28 @@ def predict(
 ) -> dict:
     """Predict the temperature metric(s) for a single sample.
 
-    Args mirror the training feature columns. Domino passes the request JSON
-    fields in as these keyword arguments.
-
-    Returns a JSON-serializable dict mapping each trained target column to its
-    predicted value (degrees Fahrenheit).
+    Args mirror the feature columns; Domino passes the request JSON fields in as
+    these keyword arguments. Returns a dict mapping each target to its predicted
+    value in degrees Fahrenheit.
     """
+    # Domino passes request fields through as-is, and values may arrive as
+    # strings (e.g. "7"); coerce to the numeric types the pipeline expects.
     df = pd.DataFrame([{
-        "Date.Month": month,
-        "Date.Week of": week_of,
-        "Data.Precipitation": precipitation,
-        "Data.Wind.Speed": wind_speed,
-        "Data.Wind.Direction": wind_direction,
-        "Station.State": state,
-    }])
+        "month": int(float(month)),
+        "week_of": int(float(week_of)),
+        "precipitation": float(precipitation),
+        "wind_speed": float(wind_speed),
+        "wind_direction": int(float(wind_direction)),
+        "state": str(state),
+    }])[FEATURE_COLUMNS]
 
-    preds = _predict(_BUNDLE, df, _DEVICE)[0]
-    return {
-        target: round(float(value), 1)
-        for target, value in zip(_BUNDLE["targets"], preds)
-    }
+    preds = _predict(_PIPELINE, _FEATURE_COLUMNS, _TARGETS, df)
+    return {t: round(float(preds.iloc[0][t]), 1) for t in _TARGETS}
 
 
 if __name__ == "__main__":
     # Local smoke test of the scoring function (same call shape Domino uses).
+    print("Feature order:", FEATURE_COLUMNS)
     print(predict(
         month=7,
         week_of=28,

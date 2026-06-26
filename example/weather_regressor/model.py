@@ -1,100 +1,99 @@
-"""Neural network architecture for weather (temperature) regression.
+"""Model definition for the weather temperature regressor (scikit-learn).
 
-A small, configurable feed-forward (MLP) regression model. Unlike the diabetes
-*classifier* (which outputs class logits), this is a *regressor*: the final
-layer is linear and produces one continuous value per target metric. It supports
-multi-output regression, so it can predict one or more metrics at once
-(by default: average, max and min temperature).
+This example mirrors the diabetes classifier but uses **scikit-learn** instead
+of PyTorch and solves a **multi-output regression** problem: predict the
+average, max and min temperature from a handful of date / location / weather
+features.
 
-The set of input features is split into numeric columns (standardized) and
-categorical columns (one-hot encoded) at training time; the fitted preprocessing
-is saved in the model checkpoint so inference reproduces it exactly.
+Everything inference needs lives in a single scikit-learn ``Pipeline``:
+
+    ColumnTransformer( StandardScaler(numeric) + OneHotEncoder(categorical) )
+      -> MultiOutputRegressor( HistGradientBoostingRegressor )
+
+Gradient-boosted trees give strong accuracy on this tabular data while keeping
+the serialized model tiny (~3 MB), which matters when it gets bundled into the
+MLflow model and deployed as an endpoint. ``MultiOutputRegressor`` fits one
+booster per temperature target.
+
+Because the preprocessing is *inside* the pipeline, the fitted estimator
+accepts raw feature values directly -- no separate scaler to ship around.
+
+The raw dataset columns have awkward names (``Date.Month``,
+``Data.Temperature.Avg Temp`` ...). We rename them to clean snake_case so both
+the custom-code Model API and the registry-deployed model expose a friendly
+JSON schema.
 """
 
 from __future__ import annotations
 
 from typing import List
 
-import torch
-import torch.nn as nn
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
-# Raw weather feature columns used as model inputs.
+# ---- Friendly (snake_case) feature / target names used everywhere ----
 NUMERIC_FEATURES: List[str] = [
-    "Date.Month",
-    "Date.Week of",
-    "Data.Precipitation",
-    "Data.Wind.Speed",
-    "Data.Wind.Direction",
+    "month",
+    "week_of",
+    "precipitation",
+    "wind_speed",
+    "wind_direction",
 ]
-CATEGORICAL_FEATURES: List[str] = [
-    "Station.State",
-]
+CATEGORICAL_FEATURES: List[str] = ["state"]
+FEATURE_COLUMNS: List[str] = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
-# Continuous metrics to predict. Multi-output regression by default; you can
-# train on a single target (e.g. just Avg Temp) via the training script.
-TARGET_COLUMNS: List[str] = [
-    "Data.Temperature.Avg Temp",
-    "Data.Temperature.Max Temp",
-    "Data.Temperature.Min Temp",
-]
+TARGET_COLUMNS: List[str] = ["avg_temp", "max_temp", "min_temp"]
+
+# ---- Mapping from the raw CSV column names to the friendly names ----
+RAW_TO_FEATURE = {
+    "Date.Month": "month",
+    "Date.Week of": "week_of",
+    "Data.Precipitation": "precipitation",
+    "Data.Wind.Speed": "wind_speed",
+    "Data.Wind.Direction": "wind_direction",
+    "Station.State": "state",
+}
+RAW_TO_TARGET = {
+    "Data.Temperature.Avg Temp": "avg_temp",
+    "Data.Temperature.Max Temp": "max_temp",
+    "Data.Temperature.Min Temp": "min_temp",
+}
 
 
-class WeatherNet(nn.Module):
-    """Configurable MLP for (multi-output) regression.
+def build_pipeline(
+    max_iter: int = 400,
+    learning_rate: float = 0.08,
+    max_depth: int | None = None,
+    random_state: int = 42,
+) -> Pipeline:
+    """Build the (unfitted) preprocessing + regression pipeline.
 
-    Args:
-        input_dim: Number of input features *after* preprocessing
-            (numeric + one-hot expanded categoricals).
-        output_dim: Number of continuous targets to predict.
-        hidden_sizes: List of hidden layer widths. The number of entries
-            controls the depth; each value controls the width of that layer.
-        dropout: Dropout probability applied after each hidden activation.
+    Numeric features are standardized and the single categorical feature
+    (``state``) is one-hot encoded; unknown categories seen at inference time
+    are ignored rather than erroring. ``HistGradientBoostingRegressor`` is a
+    single-output learner, so it is wrapped in ``MultiOutputRegressor`` to
+    predict all temperature targets (one booster per target).
     """
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", StandardScaler(), NUMERIC_FEATURES),
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+             CATEGORICAL_FEATURES),
+        ]
+    )
 
-    def __init__(
-        self,
-        input_dim: int,
-        output_dim: int = len(TARGET_COLUMNS),
-        hidden_sizes: List[int] | None = None,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
+    booster = HistGradientBoostingRegressor(
+        max_iter=max_iter,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        random_state=random_state,
+    )
 
-        if hidden_sizes is None:
-            hidden_sizes = [64, 32]
-
-        # Persist the config so an identical architecture can be rebuilt at
-        # inference time from the saved checkpoint.
-        self.config = {
-            "input_dim": input_dim,
-            "output_dim": output_dim,
-            "hidden_sizes": list(hidden_sizes),
-            "dropout": dropout,
-        }
-
-        layers: List[nn.Module] = []
-        prev = input_dim
-        for width in hidden_sizes:
-            layers.append(nn.Linear(prev, width))
-            layers.append(nn.ReLU())
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
-            prev = width
-        # Linear output head -- no activation -- one unit per target metric.
-        layers.append(nn.Linear(prev, output_dim))
-
-        self.network = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)
-
-    @classmethod
-    def from_config(cls, config: dict) -> "WeatherNet":
-        """Rebuild a model from a saved config dict."""
-        return cls(
-            input_dim=config["input_dim"],
-            output_dim=config["output_dim"],
-            hidden_sizes=config["hidden_sizes"],
-            dropout=config.get("dropout", 0.0),
-        )
+    return Pipeline([
+        ("preprocess", preprocessor),
+        ("regressor", MultiOutputRegressor(booster)),
+    ])

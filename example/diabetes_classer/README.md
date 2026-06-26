@@ -88,15 +88,37 @@ You point Domino at a file and function and write the scoring glue yourself.
 2. File: `example/diabetes_classer/model_api.py`, Function: `predict`
 3. Pick an environment that has the deps in `requirements.txt` (including `uwsgi`).
 
-The request body is the named features; `predict()` applies the scaler (from the
-checkpoint) and returns the verdict:
+Domino wraps the request in a `data` object whose fields become the `predict()`
+keyword arguments. Values may be sent as strings — the function coerces them.
+
+Request:
 
 ```json
-{ "calories_wk": 8000, "hrs_exercise_wk": 2.5, "exercise_intensity": 0.6,
-  "annual_income": 60000, "num_children": 1, "weight": 180 }
+{
+  "data": {
+    "calories_wk": "3000.0",
+    "hrs_exercise_wk": "5.0",
+    "exercise_intensity": "0.8",
+    "annual_income": "120000.0",
+    "num_children": "0.0",
+    "weight": "150.0"
+  }
+}
 ```
+
+Response (the function's returned dict, under the response `result`):
+
 ```json
-{ "is_diabetic": true, "probability": 0.6278, "threshold": 0.5 }
+{ "is_diabetic": false, "probability": 0.0067, "threshold": 0.5 }
+```
+
+Call it with `curl` (find the URL + token on the endpoint's **Overview** tab):
+
+```bash
+curl -X POST "$MODEL_API_URL" \
+  -H "Authorization: Bearer $MODEL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"calories_wk": "3000.0", "hrs_exercise_wk": "5.0", "exercise_intensity": "0.8", "annual_income": "120000.0", "num_children": "0.0", "weight": "150.0"}}'
 ```
 
 This path loads the binary from `$DOMINO_ARTIFACTS_DIR/diabetes_model/diabetes_model.pt`
@@ -121,6 +143,28 @@ inputs : calories_wk, hrs_exercise_wk, exercise_intensity,
          annual_income, num_children, weight   (all double)
 outputs: diabetes_probability (float), is_diabetic (boolean)
 ```
+
+The auto-wrapped model speaks MLflow's standard scoring format. Request:
+
+```json
+{
+  "dataframe_records": [
+    { "calories_wk": 3000.0, "hrs_exercise_wk": 5.0, "exercise_intensity": 0.8,
+      "annual_income": 120000.0, "num_children": 0.0, "weight": 150.0 }
+  ]
+}
+```
+
+Response:
+
+```json
+{ "predictions": [ { "diabetes_probability": 0.0067, "is_diabetic": false } ] }
+```
+
+> **Confirm the request envelope for your Domino version.** The above is the
+> native MLflow scoring schema; depending on how Domino fronts registry models,
+> the body may instead be wrapped (e.g. under `data`). Check the endpoint's
+> **Overview**/sample-request tab once deployed.
 
 > **Send feature values as numbers (floats).** MLflow enforces the signature
 > strictly and will not coerce, e.g., a JSON integer into a `double` column.
