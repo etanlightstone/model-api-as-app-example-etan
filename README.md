@@ -220,6 +220,9 @@ reproduce Domino's full `release` metadata block.
 | `MODEL_APP_TASKS_BACKEND` | `process` | `process` (Plan A pool) or `thread` |
 | `MODEL_APP_TASKS_CPU_WORKERS` | `0` (auto = cores−1) | process-pool size |
 | `MODEL_APP_TASKS_ENABLED` | `1` | master toggle for the async engine |
+| `MODEL_APP_TASKS_RETENTION_DAYS` | `7` | how long terminal tasks (rows + owned blobs) are kept before the reaper prunes them |
+| `MODEL_APP_TASKS_REAP_SECONDS` | `300` | how often the retention reaper sweeps; `0` disables it |
+| `MODEL_APP_TASKS_CHUNK_TIMEOUT_SECONDS` | `0` (disabled) | per-chunk inference timeout; on the `process` backend a breach rebuilds the pool to kill a wedged worker, then the chunk fails and retries |
 | `MODEL_APP_USER_HEADER` | (auto-probed) | identity header for owner-gating |
 | `MODEL_APP_DEV_OWNER` | off in Domino | treat caller as owner (local dev only) |
 | `DOMINO_API_PROXY` | `http://localhost:8899` | token-proxy base (set by Domino) |

@@ -22,11 +22,14 @@ import json
 import logging
 import multiprocessing as mp
 import os
+import shutil
 import time
 import uuid
 
+from pathlib import Path
+
 from core import config as config_mod
-from core import db, state
+from core import db, settings, state
 from services.tasks import service, storage
 from services.tasks.runner import classify_chunk, init_worker
 
@@ -41,6 +44,7 @@ _stop: asyncio.Event | None = None
 _wake: asyncio.Event | None = None
 _in_flight: set[str] = set()
 _last_tick: float = 0.0
+_last_reap: float = 0.0
 _last_error: str = ""
 
 
@@ -89,6 +93,16 @@ def _lease_stale_seconds() -> int:
 
 def _max_attempts() -> int:
     return int(os.environ.get("MODEL_APP_TASKS_MAX_ATTEMPTS", "3"))
+
+
+def _reap_seconds() -> int:
+    """How often the retention reaper sweeps (0 disables it)."""
+    return max(0, int(os.environ.get("MODEL_APP_TASKS_REAP_SECONDS", "300") or 0))
+
+
+def _chunk_timeout_seconds() -> float:
+    """Per-chunk inference timeout (0 disables; generous default off)."""
+    return max(0.0, float(os.environ.get("MODEL_APP_TASKS_CHUNK_TIMEOUT_SECONDS", "0") or 0))
 
 
 # --- time helpers (fixed-width ISO so lexicographic compares are valid) ------
@@ -196,6 +210,7 @@ async def _run() -> None:
                         continue
                     asyncio.create_task(_advance(tid))
                     budget -= 1
+            _maybe_reap()
         except Exception as exc:  # noqa: BLE001
             logger.exception("task worker tick failed")
             _last_error = str(exc)
@@ -240,6 +255,106 @@ def _load_due_ids() -> list[str]:
                 except ValueError:
                     due.append(r["id"])
     return due
+
+
+# --- retention reaper --------------------------------------------------------
+
+def _under_tasks_dir(path: str) -> bool:
+    """True only for blobs the app owns (the per-task dir under TASKS_DIR).
+
+    By-reference ``.jsonl`` inputs keep ``input_file_path`` pointing at the
+    caller's *own* dataset file — never ours to delete — so the reaper only
+    touches files that live inside ``TASKS_DIR``.
+    """
+    if not path:
+        return False
+    try:
+        Path(path).resolve().relative_to(settings.TASKS_DIR.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def _maybe_reap() -> None:
+    """Run the retention sweep at most once per ``MODEL_APP_TASKS_REAP_SECONDS``."""
+    global _last_reap
+    interval = _reap_seconds()
+    if not interval:
+        return
+    now_m = time.monotonic()
+    if _last_reap and (now_m - _last_reap) < interval:
+        return
+    _last_reap = now_m
+    try:
+        _reap()
+    except Exception:  # noqa: BLE001
+        logger.exception("retention reaper sweep failed")
+
+
+def _reap() -> None:
+    """Make ``RETENTION_DAYS`` honest.
+
+    1. Mark non-terminal tasks past ``expires_at`` as ``expired`` (covers tasks
+       nothing ever claimed).
+    2. Delete terminal tasks older than ``RETENTION_DAYS`` — both the row and
+       the on-disk blobs we own — so rows and JSONL don't accumulate forever.
+    """
+    now = _utcnow()
+    now_iso = _iso(now)
+    conn = db.get_conn()
+
+    # 1) Expire overdue, never-finished tasks.
+    overdue = conn.execute(
+        "SELECT id, expires_at FROM inference_tasks "
+        "WHERE status NOT IN ('succeeded','failed','cancelled','expired') "
+        "AND expires_at IS NOT NULL AND expires_at != ''"
+    ).fetchall()
+    expired = 0
+    for r in overdue:
+        try:
+            if now <= _dt.datetime.fromisoformat(r["expires_at"]):
+                continue
+        except ValueError:
+            continue
+        with db.transaction() as c:
+            cur = c.execute(
+                "UPDATE inference_tasks SET status='expired', error_message=?, finished_at=? "
+                "WHERE id=? AND status NOT IN ('succeeded','failed','cancelled','expired')",
+                ("task expired before completion", now_iso, r["id"]),
+            )
+        expired += cur.rowcount
+
+    # 2) Prune terminal tasks past the retention window (row + owned blobs).
+    cutoff = _iso(now - _dt.timedelta(days=service.RETENTION_DAYS))
+    old = conn.execute(
+        "SELECT id, input_file_path, output_file_path FROM inference_tasks "
+        "WHERE status IN ('succeeded','failed','cancelled','expired') "
+        "AND COALESCE(NULLIF(finished_at,''), created_at) < ?",
+        (cutoff,),
+    ).fetchall()
+    pruned = 0
+    for r in old:
+        for p in (r["input_file_path"], r["output_file_path"]):
+            if not _under_tasks_dir(p):
+                continue
+            try:
+                if os.path.isfile(p):
+                    os.unlink(p)
+            except OSError:
+                pass  # best-effort
+        # Drop the now-empty per-task dir (also clears meta.json) if it's ours.
+        task_blob_dir = settings.TASKS_DIR / r["id"]
+        try:
+            if task_blob_dir.is_dir():
+                shutil.rmtree(task_blob_dir, ignore_errors=True)
+        except OSError:
+            pass
+        with db.transaction() as c:
+            c.execute("DELETE FROM inference_tasks WHERE id=?", (r["id"],))
+        pruned += 1
+
+    if expired or pruned:
+        logger.info("reaper: expired %d overdue, pruned %d retired task(s)", expired, pruned)
 
 
 def _try_claim(task_id: str):
@@ -387,9 +502,27 @@ def _thread_classify(records: list[dict]) -> list[dict]:
 async def _flush(task_id, loop, items, end_offset, out_path) -> None:
     """Run one chunk off the loop, write results, advance the durable cursor."""
     if backend_name() == "process" and _pool is not None:
-        results = await loop.run_in_executor(_pool, classify_chunk, items)
+        awaitable = loop.run_in_executor(_pool, classify_chunk, items)
     else:
-        results = await asyncio.to_thread(_thread_classify, items)
+        awaitable = asyncio.to_thread(_thread_classify, items)
+
+    timeout = _chunk_timeout_seconds()
+    try:
+        results = await (asyncio.wait_for(awaitable, timeout) if timeout else awaitable)
+    except asyncio.TimeoutError:
+        logger.warning("task %s chunk exceeded %gs timeout; killing compute", task_id, timeout)
+        if backend_name() == "process":
+            # A wedged pool worker can't be force-cancelled once running, so the
+            # only reliable kill is to tear the pool down and rebuild it. This
+            # also interrupts any *other* in-flight chunk on the pool; those
+            # tasks fail this attempt and resume from their cursor on retry.
+            shutdown_pool()
+            configure()
+        # Thread backend can't be force-killed: the chunk fails and the abandoned
+        # thread runs to completion in the background. Re-raise either way so the
+        # existing attempts/retry path in _advance takes over.
+        raise TimeoutError(f"chunk exceeded {timeout:g}s timeout") from None
+
     for r in results:
         storage.append_jsonl_line(out_path, r)  # fsync before cursor bump
     with db.transaction() as conn:
