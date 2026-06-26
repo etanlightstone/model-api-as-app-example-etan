@@ -1,0 +1,7 @@
+# Dependencies for the image-classifier example.
+#
+# Intentionally light so it runs anywhere without a model download. To use a
+# real classifier, add `torch` + `torchvision` (or `transformers`) and swap the
+# body of `_classify` in model_api.py for a real forward pass.
+Pillow>=9.0
+numpy>=1.24

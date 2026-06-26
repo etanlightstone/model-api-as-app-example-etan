@@ -1,0 +1,25 @@
+# Schema override sidecar for the Model-API-as-App harness.
+#
+# The harness infers a model's schema from the function signature, but here the
+# `image` parameter is just typed `str` — introspection can't know it carries a
+# base64-encoded image. This sidecar pins that fact so the app marks the field
+# as an image (the playground then renders a file picker that base64-encodes the
+# file client-side) and documents the output shape.
+
+name: Image Classifier
+slug: image-classifier
+description: Classifies a base64-encoded image by global pixel statistics.
+
+# Fields that carry a base64-encoded image rather than a plain string.
+image_fields:
+  - image
+
+# Output fields (the function returns a label + per-class probabilities). Listed
+# here so the docs show the response shape without a probe call.
+outputs:
+  label:
+    type: string
+    example: colorful
+  probabilities:
+    type: object
+    example: {"dark": 0.1, "bright": 0.2, "grayscale": 0.1, "colorful": 0.6}

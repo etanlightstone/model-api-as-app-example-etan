@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">◆</span>
+        <span class="brand-name">{{ app_title }}</span>
+      </div>
+      <nav class="topnav">
+        <a href="{{ url_for('home') }}">Endpoints</a>
+        {% if state.ready %}<a href="#playground">Playground</a>{% endif %}
+        {% if caller.is_owner %}<a href="{{ url_for('settings_page') }}">Settings</a>{% endif %}
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <span>Hosted as a Domino App · API-compatible with Domino Model APIs</span>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

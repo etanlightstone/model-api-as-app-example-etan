@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="empty-state">
+  <div class="empty-card">
+    <h1>This model endpoint is not set up yet.</h1>
+    {% if state.configured and state.error %}
+      <p class="error-note">A model is configured but failed to load:</p>
+      <pre class="error-box">{{ state.error }}</pre>
+    {% else %}
+      <p>No model has been selected for this app to host.</p>
+    {% endif %}
+
+    {% if caller.is_owner %}
+      <p>As the project owner, you can pick a model to host:</p>
+      <a class="btn btn-primary" href="{{ url_for('settings_page') }}">Go to Settings →</a>
+    {% else %}
+      <p class="muted">The project owner needs to configure a model before this
+      endpoint becomes available. Check back soon.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

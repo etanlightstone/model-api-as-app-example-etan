@@ -1,0 +1,23 @@
+# Model-API-as-App harness dependencies.
+#
+# The web layer is intentionally small: FastAPI + uvicorn + Jinja, no SPA build
+# step. Model frameworks (torch / scikit-learn) come along because the hosted
+# example models need them; a deployment that only hosts one framework can trim
+# the other.
+
+# --- Web app ---
+fastapi>=0.110
+uvicorn[standard]>=0.27
+jinja2>=3.1
+pydantic>=2.6
+python-multipart>=0.0.9      # only needed if a future route accepts form/file uploads
+PyYAML>=6.0                  # model_app.yaml schema overrides
+requests>=2.31
+
+# --- Model loading / inference ---
+mlflow>=2.10                 # registry models carry an MLflow signature
+scikit-learn>=1.3
+torch>=2.0
+pandas>=2.0
+numpy>=1.24
+joblib>=1.3

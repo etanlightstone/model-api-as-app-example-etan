@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="model-head">
+  <h1>{{ adapter.name }}</h1>
+  <div class="chips">
+    <span class="chip">slug: <code>{{ adapter.slug }}</code></span>
+    <span class="chip">source: {{ state.source_type }}</span>
+    {% if has_image %}<span class="chip chip-accent">image input</span>{% endif %}
+  </div>
+  {% if adapter.description %}<p class="muted">{{ adapter.description }}</p>{% endif %}
+  {% if schema.notes %}<p class="note">{{ schema.notes }}</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Input fields</h2>
+  <table class="schema-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Example</th></tr></thead>
+    <tbody>
+      {% for f in schema.inputs %}
+      <tr>
+        <td><code>{{ f.name }}</code></td>
+        <td>{{ 'image (base64)' if f.image else f.type }}{% if f.type_unverified %}
+            <span class="badge" title="Inferred without a type hint; forwarded as a string like Domino does.">type unverified</span>{% endif %}</td>
+        <td>{{ 'yes' if f.required else 'no' }}</td>
+        <td><code>{{ f.example }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if output_fields %}
+  <h2>Output fields</h2>
+  <table class="schema-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Example</th></tr></thead>
+    <tbody>
+      {% for f in output_fields %}
+      <tr><td><code>{{ f.name }}</code></td><td>{{ f.type }}</td><td><code>{{ f.example }}</code></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head-row">
+    <h2>Endpoints</h2>
+    <div class="toggle-where">
+      <label>Calling from:</label>
+      <select id="where-toggle">
+        <option value="workload">Domino workspace / job</option>
+        <option value="offplatform">Laptop / CI</option>
+      </select>
+    </div>
+  </div>
+  <p class="muted">Same request body and method as a Domino Model API — only the
+  host/prefix and the source of the Bearer token differ. Endpoints sit behind
+  Domino app auth; programmatic callers send a Domino access token.</p>
+
+  {% for ep in endpoints %}
+  <div class="endpoint">
+    <div class="endpoint-line">
+      <span class="method method-{{ ep.method|lower }}">{{ ep.method }}</span>
+      <code class="url">{{ ep.url }}</code>
+      <span class="ep-title">{{ ep.title }}</span>
+    </div>
+    {% if ep.request_envelope %}
+    <div class="kv"><span>Request</span>
+      <pre>{{ ep.request_envelope | tojson(indent=2) }}</pre></div>
+    {% endif %}
+    <div class="kv"><span>Response</span>
+      <pre>{{ ep.response_example | tojson(indent=2) }}</pre></div>
+    {% if ep.curl_workload %}
+    <div class="kv"><span>curl</span>
+      <pre class="curl" data-workload="{{ ep.curl_workload }}" data-offplatform="{{ ep.curl_offplatform }}">{{ ep.curl_workload }}</pre>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<section class="card" id="playground">
+  <h2>Playground</h2>
+  <p class="muted">Try the live endpoint. Your browser's Domino app-auth cookie
+  carries authentication — no token handling here.</p>
+
+  <form id="pg-form" class="pg-form"
+        data-slug="{{ adapter.slug }}"
+        data-base="{{ base }}">
+    {% for f in schema.inputs %}
+    <div class="pg-field">
+      <label for="pg-{{ f.name }}">{{ f.name }}
+        {% if not f.required %}<span class="muted">(optional)</span>{% endif %}</label>
+      {% if f.image %}
+        <input type="file" accept="image/*" id="pg-{{ f.name }}" data-field="{{ f.name }}" data-image="1" />
+      {% else %}
+        <input type="text" id="pg-{{ f.name }}" data-field="{{ f.name }}"
+               value="{{ example_record[f.name] }}" />
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="pg-controls">
+      <label class="pg-mode">
+        <input type="checkbox" id="pg-async" /> async (submit + poll)
+      </label>
+      <button type="submit" class="btn btn-primary">Run prediction</button>
+    </div>
+  </form>
+
+  <div class="pg-result-wrap">
+    <div class="pg-status" id="pg-status"></div>
+    <pre class="pg-result" id="pg-result">Response will appear here.</pre>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='app.js') }}"></script>
+{% endblock %}

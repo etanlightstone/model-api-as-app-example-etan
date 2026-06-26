@@ -80,3 +80,6 @@ mlartifacts/
 *.onnx
 *.pkl
 *.joblib
+
+# Model-API-as-App local harness state (dev fallback when no dataset is mounted)
+.appdata/
