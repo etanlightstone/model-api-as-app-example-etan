@@ -29,6 +29,7 @@ Example response::
 
 from __future__ import annotations
 
+import argparse
 import base64
 import io
 
@@ -81,9 +82,33 @@ def predict(image: str) -> dict:
     return {"label": label, "probabilities": ranked}
 
 
-if __name__ == "__main__":
-    # Local smoke test with a synthetic bright-blue image.
-    buf = io.BytesIO()
-    Image.new("RGB", (64, 64), (40, 90, 230)).save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode()
+def main() -> None:
+    """Classify an image from the terminal, or a synthetic demo image.
+
+    Reads the file, base64-encodes it (the same transport Domino uses), and
+    prints the classification — so the same ``predict`` function runs locally and
+    as a hosted Model API.
+    """
+    p = argparse.ArgumentParser(
+        description="Classify an image by global pixel statistics.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument("--image", default=None,
+                   help="Path to a PNG/JPEG image to classify.")
+    args = p.parse_args()
+
+    if args.image:
+        with open(args.image, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+    else:
+        # No image given -- classify a synthetic bright-blue image.
+        print("No --image provided -- classifying a synthetic blue image.")
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), (40, 90, 230)).save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+
     print(predict(b64))
+
+
+if __name__ == "__main__":
+    main()

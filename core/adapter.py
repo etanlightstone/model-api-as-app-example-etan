@@ -35,14 +35,14 @@ from core.schema import Field, Schema
 # before loading a custom function so the *right* siblings resolve even if a
 # different model was loaded earlier in the process (test isolation; harmless in
 # production where one app hosts one model).
-_SIBLING_NAMES = ("model", "predict", "pyfunc_model")
+_SIBLING_NAMES = ("model", "pyfunc_model")
 
 
 def _purge_sibling_modules() -> None:
     """Drop cached generic-named modules so the next load re-imports its own.
 
     The example models bundle modules with identical names (``model.py``,
-    ``predict.py``, ``pyfunc_model.py``). MLflow *prepends* a registry model's
+    ``pyfunc_model.py``). MLflow *prepends* a registry model's
     bundled ``code/`` dir to ``sys.path`` but never clears ``sys.modules`` — so a
     sibling cached by an earlier load shadows the one being loaded, and
     unpickling the pyfunc fails with e.g. ``Can't get attribute
@@ -96,9 +96,9 @@ class ModelAdapter(ABC):
 def _import_module_from_path(file_path: str):
     """Import a module from an absolute file path, with its dir on sys.path.
 
-    The example ``model_api.py`` files do ``from model import ...`` /
-    ``from predict import ...``, so the module's own directory must be importable
-    *and* take priority over any earlier-loaded namesakes.
+    The example ``model_api.py`` files do ``from model import ...``, so the
+    module's own directory must be importable *and* take priority over any
+    earlier-loaded namesakes.
     """
     file_path = os.path.abspath(file_path)
     if not os.path.isfile(file_path):

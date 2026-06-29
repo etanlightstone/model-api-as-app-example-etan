@@ -13,9 +13,8 @@ problem built on a scikit-learn `Pipeline` instead of PyTorch.
 | --- | --- |
 | `model.py` | Feature/target definitions + `build_pipeline()` (preprocessing + `HistGradientBoostingRegressor`). |
 | `train.py` | Training script — MLflow tracking, saves the fitted pipeline to disk, logs a **signed pyfunc** to the registry. |
-| `predict.py` | Inference script — loads the pipeline bundle from disk. |
 | `pyfunc_model.py` | `mlflow.pyfunc` wrapper — the model deployed **from the registry entry**. |
-| `model_api.py` | Custom-code Model API entrypoint (`predict`) — the model deployed **from a file/function**. |
+| `model_api.py` | Custom-code Model API entrypoint (`predict`) — the model deployed **from a file/function**, and also a local CLI for inference. |
 | `requirements.txt` | Python dependencies. |
 
 ## Data
@@ -63,16 +62,19 @@ all options.
 
 ## Predict (local CLI)
 
+`model_api.py` doubles as a CLI: run it directly to score on disk, using the
+same warm pipeline the hosted endpoint uses.
+
 ```bash
 # Demo: scores two built-in samples
-python predict.py
+python model_api.py
 
 # Single sample via named flags
-python predict.py --month 7 --week-of 28 --state Alabama \
+python model_api.py --month 7 --week-of 28 --state Alabama \
     --precipitation 0.1 --wind-speed 5.0 --wind-direction 20
 
 # Batch from a CSV (must contain the feature columns), write results
-python predict.py --input new_weather.csv --output predictions.csv
+python model_api.py --input new_weather.csv --output predictions.csv
 ```
 
 ## Deploy as a Model API

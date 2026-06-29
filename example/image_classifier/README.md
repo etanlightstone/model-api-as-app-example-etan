@@ -36,7 +36,8 @@ The `model_app.yaml` sidecar marks `image` as an image field, so the harness:
 
 ```bash
 pip install -r requirements.txt
-python model_api.py     # classifies a synthetic blue image
+python model_api.py                 # classifies a synthetic blue image
+python model_api.py --image cat.png # classify your own PNG/JPEG
 ```
 
 ## Using a real model

@@ -271,8 +271,7 @@ Each sample's `README.md` has the full data schema and commands. Typical flow:
 ```bash
 cd example/<sample>
 python train.py     # train + track + log the registry model
-python predict.py   # sanity-check predictions locally
-python model_api.py # smoke-test the custom-code scoring function
+python model_api.py # sanity-check predictions locally (the custom-code scoring function doubles as a CLI)
 ```
 
 Then either publish via **Publish → Model APIs** / the **Model Registry** (the

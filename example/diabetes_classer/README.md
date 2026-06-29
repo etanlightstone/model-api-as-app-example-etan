@@ -10,9 +10,8 @@ Domino's built-in MLflow experiment tracking.
 | --- | --- |
 | `model.py` | Configurable MLP architecture (`DiabetesNet`) + feature definitions. |
 | `train.py` | Training script — configurable arch & hyperparameters, MLflow tracking, saves model binary to disk, logs a **signed pyfunc** to the registry. |
-| `predict.py` | Inference script — loads the binary from disk, uses GPU if available else CPU. |
 | `pyfunc_model.py` | `mlflow.pyfunc` wrapper (scaler + net + threshold) — the model deployed **from the registry entry**. |
-| `model_api.py` | Custom-code Model API entrypoint (`predict`) — the model deployed **from a file/function**. |
+| `model_api.py` | Custom-code Model API entrypoint (`predict`) — the model deployed **from a file/function**, and also a local CLI for inference (uses GPU if available else CPU). |
 | `requirements.txt` | Python dependencies. |
 
 ## Data
@@ -55,23 +54,24 @@ feature ordering, and the fitted scaler. A `metadata.json` is written alongside.
 
 Run `python train.py --help` for all options.
 
-## Predict
+## Predict (local CLI)
 
-The inference script loads the on-disk binary and **automatically uses a GPU
-when one is available, otherwise CPU**.
+`model_api.py` doubles as a CLI: run it directly to score on disk. It loads the
+on-disk binary and **automatically uses a GPU when one is available, otherwise
+CPU** — the same warm model the hosted endpoint uses.
 
 ```bash
 # Demo: scores two built-in sample patients
-python predict.py
+python model_api.py
 
 # Single patient (feature values in column order)
-python predict.py --features 8000 2.5 0.6 60000 1 180
+python model_api.py --features 8000 2.5 0.6 60000 1 180
 
 # Batch from a CSV (must contain the feature columns), write results
-python predict.py --input new_patients.csv --output predictions.csv
+python model_api.py --input new_patients.csv --output predictions.csv
 
-# Point at a specific model binary / adjust decision threshold
-python predict.py --model-path /path/to/diabetes_model.pt --threshold 0.4
+# Adjust the decision threshold
+python model_api.py --features 8000 2.5 0.6 60000 1 180 --threshold 0.4
 ```
 
 Output adds `diabetes_probability` and `predicted_is_diabetic` columns.
